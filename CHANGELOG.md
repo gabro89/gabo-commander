@@ -5,6 +5,8 @@
 
 ## Unreleased
 
+## 1.2.0 – 2026-11-10
+
 - Download folders and multiple items as one zip (Shift+F3). · Mappák és több elem letöltése egy zipként (Shift+F3).
 - Pack / unpack: zip, tar.gz, tar.xz, tar.bz2 (Alt+F5 / Alt+F9). · Tömörítés / kicsomagolás: zip, tar.gz, tar.xz, tar.bz2 (Alt+F5 / Alt+F9).
 - Filter in the panel (Ctrl+F). · Szűrő a panelen (Ctrl+F).
