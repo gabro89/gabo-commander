@@ -1,0 +1,3 @@
+# Linux-sorvégek mindenhol (a .sh fájlok Windows-sorvéggel nem futnának Ubuntun)
+* text=auto eol=lf
+*.png binary

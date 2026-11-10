@@ -1,0 +1,50 @@
+name: test
+
+on:
+  push:
+  pull_request:
+  workflow_dispatch:
+
+jobs:
+  lint:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Python syntax
+        run: python3 -m py_compile server.py
+      - name: JavaScript syntax
+        run: for f in static/*.js; do node --check "$f"; done
+      - name: Shell syntax + shellcheck
+        run: |
+          for f in *.sh; do bash -n "$f"; done
+          shellcheck -S error *.sh
+
+  install:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install from the clone (non-interactive wizard)
+        run: sudo bash install.sh --yes --lang en --port 28090
+      - name: Service answers
+        run: |
+          systemctl is-active gabo-commander
+          curl -fsS http://127.0.0.1:28090/api/info | tee info.json
+          grep -q "\"version\": \"$(cat VERSION)\"" info.json
+          curl -fsS http://127.0.0.1:28090/ | grep -q 'i18n.js'
+          curl -sS -H 'X-GC-Lang: hu' 'http://127.0.0.1:28090/api/list?path=/nincs' | grep -q 'Nem mappa'
+          curl -sS -H 'X-GC-Lang: en' 'http://127.0.0.1:28090/api/list?path=/nincs' | grep -q 'Not a folder'
+      - name: Management command
+        run: |
+          gabo-commander version
+          sudo gabo-commander status
+          sudo gabo-commander update --force
+          systemctl is-active gabo-commander
+          curl -fsS http://127.0.0.1:28090/api/info
+      - name: Reinstall keeps the settings
+        run: |
+          sudo bash /opt/gabo-commander/install.sh --yes
+          grep -q '^GC_PORT=28090' /etc/gabo-commander.env || sudo grep -q '^GC_PORT=28090' /etc/gabo-commander.env
+          curl -fsS http://127.0.0.1:28090/api/info
+      - name: Log on failure
+        if: failure()
+        run: sudo journalctl -u gabo-commander -n 50 --no-pager || true

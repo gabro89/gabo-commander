@@ -1,0 +1,275 @@
+/* Gabo Commander – fordítások / translations (hu, en) */
+'use strict';
+
+const LANGS = { hu: 'Magyar', en: 'English' };
+
+const I18N = {
+  hu: {
+    bytes: '{0} bájt',
+    server_unreachable: 'A szerver nem érhető el',
+    login_title: 'Bejelentkezés', login_btn: 'Belépés', password: 'Jelszó',
+    ok: 'OK', cancel: 'Mégse', close: 'Bezár', close_esc: 'Bezárás (Esc)',
+    n_items: '{0} elem',
+    quoted: '„{0}”',
+    and_more: '… és még {0} elem',
+
+    col_n: 'Név', col_e: 'Kit.', col_s: 'Méret', col_m: 'Módosítva', col_b: 'Létrehozva', col_p: 'Jogok', col_o: 'Tulajdonos',
+    t_drive: 'Meghajtó választás (Alt+F1 / Alt+F2)', t_usage: 'Foglaltság', t_root: 'Gyökérmappa (Ctrl+\\)',
+    t_home: 'Saját mappa', t_up: 'Szülő mappa (Backspace)', t_path: 'Kattints az útvonal beírásához',
+    parent_dir: 'Szülő mappa',
+    disk_free: '{0} szabad / {1} ({2}% foglalt)',
+    free_of: '{0} szabad / {1}',
+    quick_search: 'Gyorskeresés', quick_esc: 'Esc: kilépés',
+    status: '{0} / {1} kijelölve · {2} / {3} fájl · {4} / {5} mappa',
+
+    /* gombsor, F-gombok */
+    tb_refresh: 'Frissítés (Ctrl+R)', tb_hidden: 'Rejtett fájlok mutatása (Ctrl+H)', tb_swap: 'Panelek cseréje (Ctrl+U)',
+    tb_same: 'A másik panelen is ez a mappa (Ctrl+=)', tb_mkdir: 'Új mappa (F7)', tb_newfile: 'Új szövegfájl (Shift+F4)',
+    tb_edit: 'Szerkesztés (F4)', tb_chmod: 'Jogosultságok (F9)', tb_selpat: 'Csoport kijelölése (Num +)',
+    tb_unselpat: 'Csoport kijelölésének törlése (Num −)', tb_invert: 'Kijelölés megfordítása (Num *)',
+    tb_sizes: 'Az összes mappa méretének kiszámítása (Alt+Shift+Enter)',
+    tb_upload: 'Feltöltés a gépedről (vagy húzd rá a fájlokat a panelre)', tb_download: 'Letöltés a gépedre (Shift+F3)',
+    tb_help: 'Billentyűparancsok (F1)', tb_logout: 'Kijelentkezés',
+    fk_rename: 'F2 Átnevez', fk_view: 'F3 Nézet', fk_edit: 'F4 Szerkeszt', fk_copy: 'F5 Másol', fk_move: 'F6 Áthelyez',
+    fk_mkdir: 'F7 Új mappa', fk_del: 'F8 Töröl', fk_chmod: 'F9 Jogok',
+
+    /* másolás, ütközés */
+    pol_ask: 'Rákérdez', pol_overwrite: 'Felülír', pol_skip: 'Kihagy', pol_newer: 'Felülír, ha a forrás újabb', pol_rename: 'Átnevez – „név (2)”',
+    copy_title: 'Másolás (F5)', move_title: 'Áthelyezés / átnevezés (F6)', copy_btn: 'Másol', move_btn: 'Áthelyez',
+    copy_to: '{0} másolása ide:', move_to: '{0} áthelyezése ide:',
+    if_exists: 'Ha a cél már létezik:',
+    copy_hint: 'Egy elemnél új nevet is megadhatsz. Relatív útvonal a forrásmappához képest értendő.',
+
+    del_title: 'Törlés (F8)', del_btn: 'Törlés',
+    del_one: 'Biztosan <b>véglegesen</b> törlöd ezt az elemet? (Nincs lomtár!)',
+    del_many: 'Biztosan <b>véglegesen</b> törlöd ezt a(z) {0} elemet? (Nincs lomtár!)',
+
+    mkdir_title: 'Új mappa (F7)', create_btn: 'Létrehoz', mkdir_label: 'Új mappa neve (alkönyvtárak is: a/b/c):',
+    newfile_title: 'Új fájl (Shift+F4)', newfile_btn: 'Létrehoz és szerkeszt', newfile_label: 'Új fájl neve:', newfile_default: 'uj.txt',
+    rename_title: 'Átnevezés (F2 / Shift+F6)', rename_btn: 'Átnevez', rename_label: 'Új név:',
+    download_nofile: 'Válassz ki fájlt (mappát még nem lehet letölteni).',
+
+    saved: 'Mentve: {0}',
+    unsaved_confirm: 'Mentetlen változások vannak. Bezárod mentés nélkül?',
+    edit_title: 'Szerkesztés – {0}', edit_keys: 'Ctrl+S: mentés · Esc: bezárás',
+    save_btn: 'Mentés (Ctrl+S)', save_close_btn: 'Mentés és bezárás',
+
+    perm_owner: 'Tulajdonos', perm_group: 'Csoport', perm_others: 'Mások',
+    perm_r: 'Olvasás', perm_w: 'Írás', perm_x: 'Futtatás', perm_octal: 'Oktális',
+    chmod_title: 'Jogosultságok (F9) – {0}', apply_btn: 'Alkalmaz',
+    chmod_recursive: 'Almappákra és fájlokra is (rekurzív)',
+    chmod_rec_hint: 'Rekurzív módban a mappák futtatási (x) jogot kapnak, ahol olvasási jog van.',
+    chmod_root_hint: 'Tulajdonos/csoport váltáshoz a szervernek rootként kell futnia.',
+    bad_octal: 'Hibás oktális jog: {0}',
+    n_errors_first: '{0} hiba: {1}',
+    chmod_done: '{0} elem jogosultsága módosítva',
+
+    selpat_title: 'Csoport kijelölése (Num +)', unselpat_title: 'Kijelölés törlése (Num −)',
+    select_btn: 'Kijelöl', unselect_btn: 'Töröl', pattern_label: 'Minta (pl. *.jpg; *.png):', pattern_dirs: 'Mappákra is',
+
+    clip_copied: '{0} elem másolva – Ctrl+V a beillesztéshez',
+    clip_cut: '{0} elem kivágva – Ctrl+V a beillesztéshez',
+
+    home_drive: 'Saját mappa ({0})',
+    drive_title_L: 'Meghajtó – bal panel', drive_title_R: 'Meghajtó – jobb panel',
+
+    /* súgó */
+    help_title: 'Billentyűparancsok',
+    h_move: 'Mozgás a listában (Shift-tel: kijelölés közben)', h_enter_k: 'Enter / dupla klikk', h_enter: 'Mappa megnyitása, fájl megnézése',
+    h_up: 'Szülő mappa', h_tab: 'Váltás a két panel között', h_space: 'Kijelölés (mappánál a méretet is kiszámolja)',
+    h_insert: 'Kijelölés méretszámítás nélkül', h_selall: 'Mindent kijelöl / kijelölés törlése',
+    h_num: 'Csoport kijelölése / törlése / kijelölés megfordítása',
+    h_mouse_k: 'Bal klikk, Ctrl+klikk, Shift+klikk', h_mouse: 'Kijelölés egérrel; jobb gomb (húzva is): kijelölés mint a TC-ben',
+    h_type_k: 'Betűk gépelése', h_type: 'Gyorskeresés a névre',
+    h_rename: 'Átnevezés', h_view: 'Nézet (új lapon) / letöltés', h_edit: 'Szerkesztés / új szövegfájl',
+    h_copy: 'Másolás / áthelyezés a másik panelre', h_mkdir: 'Új mappa / törlés', h_chmod: 'Jogosultságok, tulajdonos (chmod / chown)',
+    h_clip: 'Fájlok vágólapra / kivágás / beillesztés az aktív panelre', h_drives: 'Meghajtóválasztó a bal / jobb panelhez',
+    h_menu: 'Menüsor (nyilakkal, Enterrel)', h_hist: 'Vissza / előre a mappa-előzményekben',
+    h_misc: 'Frissítés, rejtett fájlok, panelcsere, azonos mappa', h_root: 'Gyökérmappa',
+    h_sizes: 'Az összes mappa méretének kiszámítása',
+    h_drag_k: 'Húzás egérrel', h_drag: 'Másolás a másik panelre / mappára; Shift-tel áthelyezés. A gépedről ráhúzott fájlok feltöltődnek.',
+
+    about_title: 'Névjegy', about_desc: 'Kétpaneles fájlkezelő böngészőből.', about_server: 'Szerver: {0}',
+    about_version: 'Verzió: {0}', about_latest: 'Legújabb a GitHubon: {0}', about_uptodate: 'Ez a legújabb verzió.',
+    about_nocheck: 'A frissítés-ellenőrzés ki van kapcsolva.', about_checkfail: 'Nem sikerült ellenőrizni a frissítést.',
+    upd_badge: 'Új verzió: {0}', upd_badge_t: 'Elérhető egy új verzió – kattints a részletekért',
+    upd_title: 'Frissítés elérhető', upd_body: 'A Gabo Commander új verziója jelent meg: <b>{1}</b> (most: {0}).',
+    upd_howto: 'Frissítés a szerveren, egy paranccsal:', upd_changes: 'Változások', upd_later: 'Később',
+
+    /* menü */
+    m_files: 'Fájlok', m_mark: 'Jelölés', m_commands: 'Parancsok', m_view: 'Nézet', m_help: 'Súgó',
+    mi_rename: 'Átnevezés', mi_view: 'Nézet', mi_edit: 'Szerkesztés', mi_newfile: 'Új szövegfájl', mi_copy: 'Másolás',
+    mi_move: 'Áthelyezés', mi_mkdir: 'Új mappa', mi_del: 'Törlés', mi_chmod: 'Jogosultságok, tulajdonos…',
+    mi_upload: 'Feltöltés a gépről…', mi_download: 'Letöltés a gépre', mi_logout: 'Kijelentkezés',
+    mi_selpat: 'Csoport kijelölése…', mi_unselpat: 'Csoport kijelölésének törlése…', mi_selall: 'Mindet kijelöli',
+    mi_selnone: 'Kijelölés törlése', mi_invert: 'Kijelölés megfordítása', mi_sizes: 'Mappaméretek kiszámítása',
+    mi_refresh: 'Frissítés', mi_swap: 'Panelek cseréje', mi_same: 'Azonos mappa a másik panelen',
+    mi_root: 'Gyökérmappa', mi_home: 'Saját mappa', mi_up: 'Szülő mappa',
+    mi_drvL: 'Meghajtó – bal panel…', mi_drvR: 'Meghajtó – jobb panel…',
+    mi_hidden: 'Rejtett fájlok', mi_sort_n: 'Rendezés név szerint', mi_sort_e: 'Rendezés kiterjesztés szerint',
+    mi_sort_s: 'Rendezés méret szerint', mi_sort_m: 'Rendezés dátum szerint',
+    mi_keys: 'Billentyűparancsok', mi_about: 'Névjegy', mi_update: 'Frissítés keresése…',
+    lang_t: 'Nyelv / Language',
+
+    /* feladatok */
+    more_jobs: '+ még {0} feladat',
+    j_scanning: 'felmérés…', j_waiting: 'döntésre vár',
+    j_files: ' · {0} / {1} fájl', j_items: ' · {0} / {1} elem',
+    j_scan: 'Felmérés: {0} elem, {1}…', j_ask: 'Ütközés: válassz a felugró ablakban.',
+    j_left: 'hátra: {0}', j_eta: 'kész ≈ {0}', j_rate: '{0} elem/s',
+    j_done_bytes: 'Kész: {0}, {1} fájl, {2} alatt (átlag {3}/s)', j_done: 'Kész{0}, {1} alatt',
+    j_error: 'Befejezve, {0} hibával{1}', j_cancelled: 'Megszakítva',
+    j_close: 'Bezárás', j_cancel: 'Megszakítás', j_n_errors: '{0} hiba',
+    conflict_title: 'A cél már létezik', conflict_body: '{0} fájl már létezik a célhelyen:',
+    c_overwrite_all: 'Mindet felülír', c_newer: 'Ha újabb', c_skip: 'Kihagy', c_rename: 'Átnevez', c_overwrite: 'Felülír',
+    cancel_title: 'Megszakítás', cancel_btn: 'Megszakít', continue_btn: 'Folytat', cancel_q: 'Megszakítod?',
+    login_required: 'Bejelentkezés szükséges', network_error: 'Hálózati hiba', aborted: 'Megszakítva',
+    up_conflict_title: 'Feltöltés – a cél már létezik', up_conflict_body: '{0} elem már létezik itt: {1}',
+    up_title: 'Feltöltés: {0} → {1}',
+  },
+
+  en: {
+    bytes: '{0} bytes',
+    server_unreachable: 'The server cannot be reached',
+    login_title: 'Sign in', login_btn: 'Sign in', password: 'Password',
+    ok: 'OK', cancel: 'Cancel', close: 'Close', close_esc: 'Close (Esc)',
+    n_items: n => (n === 1 ? '1 item' : `${n} items`),
+    quoted: '“{0}”',
+    and_more: n => `… and ${n} more`,
+
+    col_n: 'Name', col_e: 'Ext', col_s: 'Size', col_m: 'Modified', col_b: 'Created', col_p: 'Perms', col_o: 'Owner',
+    t_drive: 'Choose drive (Alt+F1 / Alt+F2)', t_usage: 'Usage', t_root: 'Root folder (Ctrl+\\)',
+    t_home: 'Home folder', t_up: 'Parent folder (Backspace)', t_path: 'Click to type a path',
+    parent_dir: 'Parent folder',
+    disk_free: '{0} free of {1} ({2}% used)',
+    free_of: '{0} free of {1}',
+    quick_search: 'Quick search', quick_esc: 'Esc: exit',
+    status: (a, b, c, d, e, f) => `${a} / ${b} selected · ${c} / ${d} files · ${e} / ${f} folders`,
+
+    tb_refresh: 'Refresh (Ctrl+R)', tb_hidden: 'Show hidden files (Ctrl+H)', tb_swap: 'Swap panels (Ctrl+U)',
+    tb_same: 'Same folder in the other panel (Ctrl+=)', tb_mkdir: 'New folder (F7)', tb_newfile: 'New text file (Shift+F4)',
+    tb_edit: 'Edit (F4)', tb_chmod: 'Permissions (F9)', tb_selpat: 'Select group (Num +)',
+    tb_unselpat: 'Unselect group (Num −)', tb_invert: 'Invert selection (Num *)',
+    tb_sizes: 'Calculate the size of all folders (Alt+Shift+Enter)',
+    tb_upload: 'Upload from your computer (or drop files onto a panel)', tb_download: 'Download to your computer (Shift+F3)',
+    tb_help: 'Keyboard shortcuts (F1)', tb_logout: 'Sign out',
+    fk_rename: 'F2 Rename', fk_view: 'F3 View', fk_edit: 'F4 Edit', fk_copy: 'F5 Copy', fk_move: 'F6 Move',
+    fk_mkdir: 'F7 New folder', fk_del: 'F8 Delete', fk_chmod: 'F9 Perms',
+
+    pol_ask: 'Ask', pol_overwrite: 'Overwrite', pol_skip: 'Skip', pol_newer: 'Overwrite if the source is newer', pol_rename: 'Rename – “name (2)”',
+    copy_title: 'Copy (F5)', move_title: 'Move / rename (F6)', copy_btn: 'Copy', move_btn: 'Move',
+    copy_to: 'Copy {0} to:', move_to: 'Move {0} to:',
+    if_exists: 'If the target already exists:',
+    copy_hint: 'For a single item you can also give a new name. Relative paths are relative to the source folder.',
+
+    del_title: 'Delete (F8)', del_btn: 'Delete',
+    del_one: 'Delete this item <b>permanently</b>? (There is no trash!)',
+    del_many: 'Delete these {0} items <b>permanently</b>? (There is no trash!)',
+
+    mkdir_title: 'New folder (F7)', create_btn: 'Create', mkdir_label: 'New folder name (subfolders too: a/b/c):',
+    newfile_title: 'New file (Shift+F4)', newfile_btn: 'Create and edit', newfile_label: 'New file name:', newfile_default: 'new.txt',
+    rename_title: 'Rename (F2 / Shift+F6)', rename_btn: 'Rename', rename_label: 'New name:',
+    download_nofile: 'Select a file (folders cannot be downloaded yet).',
+
+    saved: 'Saved: {0}',
+    unsaved_confirm: 'There are unsaved changes. Close without saving?',
+    edit_title: 'Edit – {0}', edit_keys: 'Ctrl+S: save · Esc: close',
+    save_btn: 'Save (Ctrl+S)', save_close_btn: 'Save and close',
+
+    perm_owner: 'Owner', perm_group: 'Group', perm_others: 'Others',
+    perm_r: 'Read', perm_w: 'Write', perm_x: 'Execute', perm_octal: 'Octal',
+    chmod_title: 'Permissions (F9) – {0}', apply_btn: 'Apply',
+    chmod_recursive: 'Apply to subfolders and files too (recursive)',
+    chmod_rec_hint: 'In recursive mode folders get execute (x) permission wherever they have read permission.',
+    chmod_root_hint: 'Changing the owner/group requires the server to run as root.',
+    bad_octal: 'Invalid octal mode: {0}',
+    n_errors_first: (n, m) => `${n} error${n === 1 ? '' : 's'}: ${m}`,
+    chmod_done: n => `Permissions changed on ${n} item${n === 1 ? '' : 's'}`,
+
+    selpat_title: 'Select group (Num +)', unselpat_title: 'Unselect group (Num −)',
+    select_btn: 'Select', unselect_btn: 'Unselect', pattern_label: 'Pattern (e.g. *.jpg; *.png):', pattern_dirs: 'Include folders',
+
+    clip_copied: n => `${n} item${n === 1 ? '' : 's'} copied – Ctrl+V to paste`,
+    clip_cut: n => `${n} item${n === 1 ? '' : 's'} cut – Ctrl+V to paste`,
+
+    home_drive: 'Home folder ({0})',
+    drive_title_L: 'Drive – left panel', drive_title_R: 'Drive – right panel',
+
+    help_title: 'Keyboard shortcuts',
+    h_move: 'Move in the list (with Shift: select while moving)', h_enter_k: 'Enter / double click', h_enter: 'Open folder, view file',
+    h_up: 'Parent folder', h_tab: 'Switch between the two panels', h_space: 'Select (for folders it also calculates the size)',
+    h_insert: 'Select without size calculation', h_selall: 'Select all / clear selection',
+    h_num: 'Select group / unselect group / invert selection',
+    h_mouse_k: 'Click, Ctrl+click, Shift+click', h_mouse: 'Select with the mouse; right button (also dragging): select like in TC',
+    h_type_k: 'Typing letters', h_type: 'Quick search by name',
+    h_rename: 'Rename', h_view: 'View (in a new tab) / download', h_edit: 'Edit / new text file',
+    h_copy: 'Copy / move to the other panel', h_mkdir: 'New folder / delete', h_chmod: 'Permissions, owner (chmod / chown)',
+    h_clip: 'Copy / cut files to the clipboard / paste into the active panel', h_drives: 'Drive menu for the left / right panel',
+    h_menu: 'Menu bar (arrows, Enter)', h_hist: 'Back / forward in folder history',
+    h_misc: 'Refresh, hidden files, swap panels, same folder', h_root: 'Root folder',
+    h_sizes: 'Calculate the size of all folders',
+    h_drag_k: 'Mouse drag', h_drag: 'Copy to the other panel / a folder; with Shift: move. Files dropped from your computer are uploaded.',
+
+    about_title: 'About', about_desc: 'Two-panel file manager in the browser.', about_server: 'Server: {0}',
+    about_version: 'Version: {0}', about_latest: 'Latest on GitHub: {0}', about_uptodate: 'This is the latest version.',
+    about_nocheck: 'Update checking is turned off.', about_checkfail: 'Could not check for updates.',
+    upd_badge: 'New version: {0}', upd_badge_t: 'A new version is available – click for details',
+    upd_title: 'Update available', upd_body: 'A new version of Gabo Commander is out: <b>{1}</b> (current: {0}).',
+    upd_howto: 'Update on the server with one command:', upd_changes: 'Changes', upd_later: 'Later',
+
+    m_files: 'Files', m_mark: 'Mark', m_commands: 'Commands', m_view: 'View', m_help: 'Help',
+    mi_rename: 'Rename', mi_view: 'View', mi_edit: 'Edit', mi_newfile: 'New text file', mi_copy: 'Copy',
+    mi_move: 'Move', mi_mkdir: 'New folder', mi_del: 'Delete', mi_chmod: 'Permissions, owner…',
+    mi_upload: 'Upload from computer…', mi_download: 'Download to computer', mi_logout: 'Sign out',
+    mi_selpat: 'Select group…', mi_unselpat: 'Unselect group…', mi_selall: 'Select all',
+    mi_selnone: 'Clear selection', mi_invert: 'Invert selection', mi_sizes: 'Calculate folder sizes',
+    mi_refresh: 'Refresh', mi_swap: 'Swap panels', mi_same: 'Same folder in the other panel',
+    mi_root: 'Root folder', mi_home: 'Home folder', mi_up: 'Parent folder',
+    mi_drvL: 'Drive – left panel…', mi_drvR: 'Drive – right panel…',
+    mi_hidden: 'Hidden files', mi_sort_n: 'Sort by name', mi_sort_e: 'Sort by extension',
+    mi_sort_s: 'Sort by size', mi_sort_m: 'Sort by date',
+    mi_keys: 'Keyboard shortcuts', mi_about: 'About', mi_update: 'Check for updates…',
+    lang_t: 'Language / Nyelv',
+
+    more_jobs: n => `+ ${n} more task${n === 1 ? '' : 's'}`,
+    j_scanning: 'scanning…', j_waiting: 'waiting for you',
+    j_files: ' · {0} / {1} files', j_items: ' · {0} / {1} items',
+    j_scan: 'Scanning: {0} items, {1}…', j_ask: 'Conflict: choose in the dialog.',
+    j_left: 'left: {0}', j_eta: 'done ≈ {0}', j_rate: '{0} items/s',
+    j_done_bytes: (a, n, d, s) => `Done: ${a}, ${n} file${n === 1 ? '' : 's'} in ${d} (avg. ${s}/s)`, j_done: 'Done{0} in {1}',
+    j_error: (n, f) => `Finished with ${n} error${n === 1 ? '' : 's'}${f}`, j_cancelled: 'Cancelled',
+    j_close: 'Close', j_cancel: 'Cancel', j_n_errors: n => `${n} error${n === 1 ? '' : 's'}`,
+    conflict_title: 'The target already exists',
+    conflict_body: n => (n === 1 ? '1 file already exists at the target:' : `${n} files already exist at the target:`),
+    c_overwrite_all: 'Overwrite all', c_newer: 'If newer', c_skip: 'Skip', c_rename: 'Rename', c_overwrite: 'Overwrite',
+    cancel_title: 'Cancel', cancel_btn: 'Cancel task', continue_btn: 'Continue', cancel_q: 'Cancel this task?',
+    login_required: 'Sign-in required', network_error: 'Network error', aborted: 'Cancelled',
+    up_conflict_title: 'Upload – the target already exists',
+    up_conflict_body: (n, d) => `${n} item${n === 1 ? ' already exists' : 's already exist'} in: ${d}`,
+    up_title: 'Upload: {0} → {1}',
+  },
+};
+
+function pickLang(serverDefault) {
+  let l = null;
+  try { l = JSON.parse(localStorage.getItem('gc.lang')); } catch (e) { /* privát mód / private mode */ }
+  if (I18N[l]) return l;
+  if (I18N[serverDefault]) return serverDefault;
+  return /^hu\b/i.test(navigator.language || '') ? 'hu' : 'en';
+}
+
+let LANG = pickLang(null);
+
+/* t('key', arg0, arg1…) – a {0}, {1} helyére az argumentumok kerülnek; a függvény értékű kulcsok többes számot kezelnek */
+function t(key, ...args) {
+  let s = I18N[LANG] && I18N[LANG][key];
+  if (s == null) s = I18N.en[key] != null ? I18N.en[key] : key;
+  if (typeof s === 'function') return s(...args);
+  return args.length ? s.replace(/\{(\d+)\}/g, (m, i) => (args[i] != null ? args[i] : '')) : s;
+}
+
+function applyI18n(root = document) {
+  document.documentElement.lang = LANG;
+  for (const el of root.querySelectorAll('[data-i18n]')) el.textContent = t(el.dataset.i18n);
+  for (const el of root.querySelectorAll('[data-i18n-title]')) el.title = t(el.dataset.i18nTitle);
+}

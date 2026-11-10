@@ -1,0 +1,68 @@
+<!doctype html>
+<html lang="hu">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Gabo Commander</title>
+<link rel="icon" href="favicon.svg" type="image/svg+xml">
+<link rel="apple-touch-icon" href="favicon.svg">
+<meta name="theme-color" content="#0078d7">
+<link rel="stylesheet" href="style.css">
+</head>
+<body>
+<div id="app">
+  <nav id="menubar">
+    <span class="grow"></span>
+    <button id="upd" class="upd" hidden></button>
+    <span class="brand"><img src="favicon.svg" alt=""> Gabo Commander <span id="ver"></span></span>
+    <span id="host"></span>
+  </nav>
+
+  <header id="toolbar">
+    <button data-cmd="refresh" data-i18n-title="tb_refresh"><svg viewBox="0 0 16 16"><path d="M13 8a5 5 0 1 1-1.5-3.6" fill="none" stroke="#2e9b36" stroke-width="2"/><path d="M9.6 1.2h4.6v4.6z" fill="#2e9b36"/></svg></button>
+    <span class="tsep"></span>
+    <button data-cmd="hidden" data-i18n-title="tb_hidden"><svg viewBox="0 0 16 16"><path d="M1 8s2.6-4.5 7-4.5S15 8 15 8s-2.6 4.5-7 4.5S1 8 1 8z" fill="#fff" stroke="#46576b"/><circle cx="8" cy="8" r="2.6" fill="#2b74c7"/><circle cx="8" cy="8" r="1.1" fill="#0b2a4a"/></svg></button>
+    <button data-cmd="swap" data-i18n-title="tb_swap"><svg viewBox="0 0 16 16"><path d="M2 5.5h10" stroke="#2b74c7" stroke-width="2"/><path d="M10 2l4 3.5-4 3.5z" fill="#2b74c7"/><path d="M14 10.5H4" stroke="#d9480f" stroke-width="2"/><path d="M6 7l-4 3.5L6 14z" fill="#d9480f"/></svg></button>
+    <button data-cmd="same" data-i18n-title="tb_same"><svg viewBox="0 0 16 16"><rect x="1" y="2.5" width="6" height="11" fill="#fff" stroke="#46576b"/><rect x="9" y="2.5" width="6" height="11" fill="#fff" stroke="#46576b"/><path d="M1.5 5h5M9.5 5h5" stroke="#0078d7" stroke-width="1.6"/><path d="M2.5 8h3M2.5 10h3M10.5 8h3M10.5 10h3" stroke="#999"/></svg></button>
+    <span class="tsep"></span>
+    <button data-cmd="mkdir" data-i18n-title="tb_mkdir"><svg viewBox="0 0 16 16"><path d="M1 3.5h4.5L7 5h7.5v8.5H1z" fill="#ffd257" stroke="#c18c00"/><circle cx="12" cy="11.5" r="3.3" fill="#2e9b36"/><path d="M12 9.6v3.8M10.1 11.5h3.8" stroke="#fff" stroke-width="1.4"/></svg></button>
+    <button data-cmd="newfile" data-i18n-title="tb_newfile"><svg viewBox="0 0 16 16"><path d="M3 1.5h6.5l3 3v10H3z" fill="#fff" stroke="#808080"/><path d="M9.5 1.5v3h3" fill="none" stroke="#808080"/><path d="M5 7h5M5 9h5M5 11h3" stroke="#5a7fa8"/></svg></button>
+    <button data-cmd="edit" data-i18n-title="tb_edit"><svg viewBox="0 0 16 16"><path d="M2.5 1.5h7l2 2v4" fill="#fff" stroke="#808080"/><path d="M2.5 1.5v13h5" fill="none" stroke="#808080"/><path d="M8.5 14.5l.5-2.5 5-5 2 2-5 5z" fill="#f6c443" stroke="#9a7300"/><path d="M4.5 5h4M4.5 7h3" stroke="#5a7fa8"/></svg></button>
+    <button data-cmd="chmod" data-i18n-title="tb_chmod"><svg viewBox="0 0 16 16"><rect x="3" y="7" width="10" height="7.5" rx="1" fill="#f6c443" stroke="#9a7300"/><path d="M5 7V5a3 3 0 0 1 6 0v2" fill="none" stroke="#6b7c90" stroke-width="1.6"/><circle cx="8" cy="10.5" r="1.2" fill="#7a5a00"/></svg></button>
+    <span class="tsep"></span>
+    <button data-cmd="selpat" data-i18n-title="tb_selpat"><svg viewBox="0 0 16 16"><path d="M2 3h8M2 6.5h8M2 10h8M2 13.5h5" stroke="#e00000" stroke-width="1.6"/><circle cx="12.5" cy="12" r="3.2" fill="#2e9b36"/><path d="M12.5 10.2v3.6M10.7 12h3.6" stroke="#fff" stroke-width="1.4"/></svg></button>
+    <button data-cmd="unselpat" data-i18n-title="tb_unselpat"><svg viewBox="0 0 16 16"><path d="M2 3h8M2 6.5h8M2 10h8M2 13.5h5" stroke="#e00000" stroke-width="1.6"/><circle cx="12.5" cy="12" r="3.2" fill="#d33"/><path d="M10.7 12h3.6" stroke="#fff" stroke-width="1.4"/></svg></button>
+    <button data-cmd="invert" data-i18n-title="tb_invert"><svg viewBox="0 0 16 16"><path d="M2 3h6M2 9h6" stroke="#e00000" stroke-width="1.6"/><path d="M2 6h6M2 12h6" stroke="#333" stroke-width="1.6"/><path d="M12 2.5v11" stroke="#2b74c7" stroke-width="1.6"/><path d="M9.5 5 12 2l2.5 3M9.5 11l2.5 3 2.5-3" fill="none" stroke="#2b74c7" stroke-width="1.4"/></svg></button>
+    <button data-cmd="sizes" data-i18n-title="tb_sizes"><svg viewBox="0 0 16 16"><path d="M1 3.5h4.5L7 5h7.5v8.5H1z" fill="#ffd257" stroke="#c18c00"/><path d="M5 7h6l-3 2.5L11 12H5" fill="none" stroke="#1a4f8a" stroke-width="1.4"/></svg></button>
+    <span class="tsep"></span>
+    <button data-cmd="upload" data-i18n-title="tb_upload"><svg viewBox="0 0 16 16"><path d="M1.5 10.5v4h13v-4" fill="none" stroke="#46576b" stroke-width="1.4"/><path d="M8 11.5V3" stroke="#2b74c7" stroke-width="2.2"/><path d="M3.8 6.2 8 1.5l4.2 4.7z" fill="#2b74c7"/></svg></button>
+    <button data-cmd="download" data-i18n-title="tb_download"><svg viewBox="0 0 16 16"><path d="M1.5 10.5v4h13v-4" fill="none" stroke="#46576b" stroke-width="1.4"/><path d="M8 1.5V9" stroke="#2e9b36" stroke-width="2.2"/><path d="M3.8 7.3 8 12l4.2-4.7z" fill="#2e9b36"/></svg></button>
+    <span class="grow"></span>
+    <button data-cmd="help" data-i18n-title="tb_help"><svg viewBox="0 0 16 16"><circle cx="8" cy="8" r="6.8" fill="#2b74c7"/><path d="M5.9 6.1a2.1 2.1 0 1 1 3 1.9c-.6.3-.9.7-.9 1.4v.5" fill="none" stroke="#fff" stroke-width="1.6"/><circle cx="8" cy="11.9" r="1" fill="#fff"/></svg></button>
+    <button data-cmd="logout" id="logout" hidden data-i18n-title="tb_logout"><svg viewBox="0 0 16 16"><path d="M5 3.8a5.5 5.5 0 1 0 6 0" fill="none" stroke="#d33" stroke-width="1.8"/><path d="M8 1v7" stroke="#d33" stroke-width="1.8"/></svg></button>
+  </header>
+
+  <main id="panels">
+    <section class="panel" id="left"></section>
+    <section class="panel" id="right"></section>
+  </main>
+
+  <footer id="fkeys">
+    <button data-cmd="rename" data-i18n="fk_rename">F2 Átnevez</button>
+    <button data-cmd="view" data-i18n="fk_view">F3 Nézet</button>
+    <button data-cmd="edit" data-i18n="fk_edit">F4 Szerkeszt</button>
+    <button data-cmd="copy" data-i18n="fk_copy">F5 Másol</button>
+    <button data-cmd="move" data-i18n="fk_move">F6 Áthelyez</button>
+    <button data-cmd="mkdir" data-i18n="fk_mkdir">F7 Új mappa</button>
+    <button data-cmd="del" data-i18n="fk_del">F8 Töröl</button>
+    <button data-cmd="chmod" data-i18n="fk_chmod">F9 Jogok</button>
+  </footer>
+</div>
+<div id="jobs"></div>
+<div id="toasts"></div>
+<div id="dragghost"></div>
+<input type="file" id="fileinput" multiple hidden>
+<script src="i18n.js"></script>
+<script src="app.js"></script>
+</body>
+</html>
