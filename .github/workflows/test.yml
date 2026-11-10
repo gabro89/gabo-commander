@@ -33,6 +33,19 @@ jobs:
           curl -fsS http://127.0.0.1:28090/ | grep -q 'i18n.js'
           curl -sS -H 'X-GC-Lang: hu' 'http://127.0.0.1:28090/api/list?path=/nincs' | grep -q 'Nem mappa'
           curl -sS -H 'X-GC-Lang: en' 'http://127.0.0.1:28090/api/list?path=/nincs' | grep -q 'Not a folder'
+      - name: Zip download, pack and unpack
+        run: |
+          mkdir -p /tmp/gct/src/sub && echo hello > /tmp/gct/src/a.txt && head -c 100000 /dev/urandom > /tmp/gct/src/sub/b.bin
+          sudo chown -R "$(sed -n 's/^User=//p' /etc/systemd/system/gabo-commander.service)" /tmp/gct
+          curl -fsS -o /tmp/dl.zip 'http://127.0.0.1:28090/api/zip?dir=/tmp/gct/src&n=a.txt&n=sub'
+          unzip -l /tmp/dl.zip && unzip -tq /tmp/dl.zip
+          H='-H X-GC:1 -H Content-Type:application/json'
+          curl -fsS $H -d '{"sources":["/tmp/gct/src"],"dest":"/tmp/gct/a.tar.xz","format":"tar.xz"}' http://127.0.0.1:28090/api/pack
+          for i in $(seq 1 20); do [ -f /tmp/gct/a.tar.xz ] && break; sleep 0.5; done
+          curl -fsS $H -d '{"archives":["/tmp/gct/a.tar.xz"],"dest":"/tmp/gct/out","subdir":true}' http://127.0.0.1:28090/api/unpack
+          for i in $(seq 1 20); do [ -f /tmp/gct/out/a/src/sub/b.bin ] && break; sleep 0.5; done
+          sleep 1; cmp /tmp/gct/src/sub/b.bin /tmp/gct/out/a/src/sub/b.bin
+          test -d /var/lib/gabo-commander
       - name: Management command
         run: |
           gabo-commander version

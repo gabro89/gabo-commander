@@ -29,11 +29,13 @@ import socket
 import stat
 import struct
 import sys
+import tarfile
 import threading
 import time
 import traceback
 import urllib.parse
 import urllib.request
+import zipfile
 
 try:
     import grp
@@ -65,7 +67,9 @@ HAS_SENDFILE = hasattr(os, 'sendfile') and sys.platform.startswith('linux')
 
 CONFIG = {'password': '', 'password_hash': '', 'verbose': False, 'lang': 'en',
           'update_check': True, 'repo': DEFAULT_REPO}
-SESSIONS = set()
+SESSIONS = {}          # sha256(token) -> lejárat (unix idő)
+SESSIONS_LOCK = threading.Lock()
+SESSION_AGE = 30 * 24 * 3600
 
 # ------------------------------------------------------------------ fordítások / translations
 
@@ -87,6 +91,10 @@ MSG = {
         'items': '{0} elem', 'job_copy': 'Másolás', 'job_move': 'Áthelyezés', 'job_delete': 'Törlés',
         'no_such_job': 'Nincs ilyen feladat', 'length_required': 'Content-Length szükséges',
         'upload_interrupted': 'Megszakadt feltöltés',
+        'too_many_logins': 'Túl sok sikertelen belépés. Próbáld újra {0} perc múlva.',
+        'not_archive': 'Nem támogatott archívum: {0}', 'unsafe_path': 'Veszélyes útvonal kihagyva: {0}',
+        'bad_format': 'Ismeretlen formátum: {0}', 'job_pack': 'Tömörítés', 'job_unpack': 'Kicsomagolás',
+        'zip_errors': 'Ezeket nem sikerült beletenni:',
         'running': 'Gabo Commander {0} fut:', 'user': 'Felhasználó: {0}',
         'no_password': 'Figyelem: nincs jelszó – csak megbízható belső hálózaton használd! (gabo-commander password)',
     },
@@ -107,6 +115,10 @@ MSG = {
         'items': '{0} items', 'items1': '1 item', 'job_copy': 'Copy', 'job_move': 'Move', 'job_delete': 'Delete',
         'no_such_job': 'No such task', 'length_required': 'Content-Length required',
         'upload_interrupted': 'Upload interrupted',
+        'too_many_logins': 'Too many failed sign-ins. Try again in {0} minutes.',
+        'not_archive': 'Unsupported archive: {0}', 'unsafe_path': 'Unsafe path skipped: {0}',
+        'bad_format': 'Unknown format: {0}', 'job_pack': 'Pack', 'job_unpack': 'Unpack',
+        'zip_errors': 'These could not be added:',
         'running': 'Gabo Commander {0} is running:', 'user': 'User: {0}',
         'no_password': 'Warning: no password – use only on a trusted local network! (gabo-commander password)',
     },
@@ -792,6 +804,438 @@ def do_chmod(paths, mode, recursive, owner, group, lang):
     return {'count': count[0], 'errors': errors[:100], 'error_count': len(errors)}
 
 
+# ------------------------------------------------------------------ állapot (munkamenetek, kedvencek) / state
+
+def state_dir():
+    """systemd StateDirectory (/var/lib/gabo-commander), különben ~/.local/state/gabo-commander."""
+    d = (os.environ.get('STATE_DIRECTORY') or '').split(os.pathsep)[0]   # systemd több mappát ':'-tal választ el
+    if not d and os.path.isdir('/var/lib/gabo-commander') and os.access('/var/lib/gabo-commander', os.W_OK):
+        d = '/var/lib/gabo-commander'
+    return d or os.path.join(os.path.expanduser('~'), '.local', 'state', 'gabo-commander')
+
+
+def load_state(name, default):
+    try:
+        with open(os.path.join(state_dir(), name), encoding='utf-8') as f:
+            return json.load(f)
+    except (OSError, ValueError):
+        return default
+
+
+def save_state(name, data):
+    d = state_dir()
+    try:
+        os.makedirs(d, mode=0o700, exist_ok=True)
+        tmp = os.path.join(d, '.%s.%s.tmp' % (name, secrets.token_hex(4)))
+        fd = os.open(tmp, os.O_WRONLY | os.O_CREAT | os.O_TRUNC, 0o600)
+        with os.fdopen(fd, 'w', encoding='utf-8') as f:
+            json.dump(data, f)
+        os.replace(tmp, os.path.join(d, name))
+    except OSError as e:
+        sys.stderr.write('cannot save %s: %s\n' % (name, e))
+
+
+def _pw_fingerprint():
+    """Ha a jelszó megváltozik, a régi munkamenetek érvénytelenné válnak."""
+    return hashlib.sha256((CONFIG['password_hash'] or CONFIG['password']).encode('utf-8')).hexdigest()[:16]
+
+
+def _tok_hash(tok):
+    return hashlib.sha256(tok.encode('utf-8')).hexdigest()
+
+
+def sessions_load():
+    data = load_state('sessions.json', {})
+    now = time.time()
+    if isinstance(data, dict) and data.get('pw') == _pw_fingerprint():
+        for h, exp in (data.get('s') or {}).items():
+            if isinstance(exp, (int, float)) and exp > now:
+                SESSIONS[h] = exp
+
+
+def _sessions_save():
+    now = time.time()
+    for h in [h for h, exp in SESSIONS.items() if exp <= now]:
+        del SESSIONS[h]
+    save_state('sessions.json', {'pw': _pw_fingerprint(), 's': SESSIONS})
+
+
+def session_new():
+    tok = secrets.token_urlsafe(32)
+    with SESSIONS_LOCK:
+        SESSIONS[_tok_hash(tok)] = time.time() + SESSION_AGE
+        _sessions_save()
+    return tok
+
+
+def session_valid(tok):
+    exp = SESSIONS.get(_tok_hash(tok))
+    return bool(exp and exp > time.time())
+
+
+def session_drop(tok):
+    with SESSIONS_LOCK:
+        if SESSIONS.pop(_tok_hash(tok), None) is not None:
+            _sessions_save()
+
+
+# sikertelen belépések IP-címenként: 15 percen belül 8 hiba után 15 perc tiltás
+FAILS = {}
+FAILS_LOCK = threading.Lock()
+FAIL_WINDOW, FAIL_MAX = 15 * 60, 8
+
+
+def login_blocked(ip):
+    """Hány másodpercig tiltott még (0 = nem tiltott)."""
+    now = time.time()
+    with FAILS_LOCK:
+        lst = [t for t in FAILS.get(ip, []) if now - t < FAIL_WINDOW]
+        FAILS[ip] = lst
+        if len(lst) >= FAIL_MAX:
+            return int(FAIL_WINDOW - (now - lst[0])) + 1
+    return 0
+
+
+def login_failed(ip):
+    with FAILS_LOCK:
+        FAILS.setdefault(ip, []).append(time.time())
+        if len(FAILS) > 10000:    # ne nőjön a végtelenségig
+            FAILS.clear()
+
+
+def login_ok(ip):
+    with FAILS_LOCK:
+        FAILS.pop(ip, None)
+
+
+# ------------------------------------------------------------------ archívumok / archives
+
+PACK_FORMATS = {'zip': None, 'tar.gz': 'w:gz', 'tar.xz': 'w:xz', 'tar.bz2': 'w:bz2', 'tar': 'w'}
+ARCHIVE_EXTS = ('.tar.gz', '.tgz', '.tar.xz', '.txz', '.tar.bz2', '.tbz2', '.tbz', '.tar', '.zip')
+NO_DEFLATE = {'zip', 'gz', 'tgz', 'xz', 'bz2', '7z', 'rar', 'zst', 'jpg', 'jpeg', 'png', 'gif', 'webp', 'avif', 'heic',
+              'mp3', 'm4a', 'aac', 'ogg', 'opus', 'flac', 'mp4', 'mkv', 'avi', 'mov', 'webm', 'm4v', 'iso', 'deb', 'rpm'}
+
+
+def archive_base(name):
+    low = name.lower()
+    for ext in ARCHIVE_EXTS:
+        if low.endswith(ext) and len(name) > len(ext):
+            return name[:-len(ext)]
+    return os.path.splitext(name)[0] or name
+
+
+def walk_items(sources, job=None):
+    """(teljes útvonal, archívumbeli név, lstat) minden elemre, mappák is; a hibákat a feladatba írja."""
+    out = []
+    for src in sources:
+        stack = [(src, os.path.basename(src.rstrip('/\\')) or 'root')]
+        while stack:
+            if job:
+                job.check()
+            path, arc = stack.pop()
+            try:
+                st = os.lstat(path)
+            except OSError as e:
+                if job:
+                    job.fail(e)
+                continue
+            out.append((path, arc, st))
+            if stat.S_ISDIR(st.st_mode):
+                try:
+                    names = sorted(os.listdir(path), reverse=True)
+                except OSError as e:
+                    if job:
+                        job.fail(e)
+                    continue
+                stack.extend((os.path.join(path, n), arc + '/' + n) for n in names)
+            elif stat.S_ISREG(st.st_mode) and job:
+                job.total_files += 1
+                job.total_bytes += st.st_size
+    return out
+
+
+def zip_items(zf, items, job=None, errors=None):
+    """Elemek írása egy nyitott ZipFile-ba (lehet nem kereshető adatfolyam is, pl. a letöltés)."""
+    for path, arc, st in items:
+        if job:
+            job.check()
+            job.current = path
+        try:
+            if stat.S_ISLNK(st.st_mode):      # a fájlra mutató linket a tartalmával tesszük bele
+                try:
+                    st = os.stat(path)
+                except OSError:
+                    continue
+                if not stat.S_ISREG(st.st_mode):
+                    continue
+            if stat.S_ISDIR(st.st_mode):
+                zf.write(path, arc)
+                continue
+            if not stat.S_ISREG(st.st_mode):
+                continue
+            zi = zipfile.ZipInfo.from_file(path, arc, strict_timestamps=False)
+            ext = arc.rsplit('.', 1)[-1].lower() if '.' in arc else ''
+            zi.compress_type = zipfile.ZIP_STORED if ext in NO_DEFLATE else zipfile.ZIP_DEFLATED
+            with open(path, 'rb') as fi:
+                with zf.open(zi, 'w', force_zip64=st.st_size >= zipfile.ZIP64_LIMIT) as fo:
+                    while True:
+                        if job:
+                            job.check()
+                        b = fi.read(1 << 20)
+                        if not b:
+                            break
+                        fo.write(b)
+                        if job:
+                            job.done_bytes += len(b)
+                            job.tick()
+            if job:
+                job.done_files += 1
+        except (OSError, ValueError) as e:
+            if job:
+                job.fail(e)
+            if errors is not None:
+                errors.append('%s: %s' % (arc, getattr(e, 'strerror', None) or e))
+
+
+class _JobReader:
+    """Fájl olvasása közben frissíti a feladat előrehaladását és figyeli a megszakítást."""
+
+    def __init__(self, f, job):
+        self.f, self.job = f, job
+
+    def read(self, n=-1):
+        self.job.check()
+        b = self.f.read(n)
+        self.job.done_bytes += len(b)
+        self.job.tick()
+        return b
+
+
+def pack_job(job, sources, dest, fmt):
+    sources = [norm(x) for x in sources]
+    dest = norm(dest)
+    if os.path.lexists(dest):
+        raise GCError('exists', dest)
+    items = walk_items(sources, job)
+    tmp = dest + '.gcpart'
+    job.set_running()
+    ok = False
+    try:
+        if fmt == 'zip':
+            with zipfile.ZipFile(tmp, 'w', allowZip64=True, strict_timestamps=False) as zf:
+                zip_items(zf, items, job)
+        else:
+            with tarfile.open(tmp, PACK_FORMATS[fmt], format=tarfile.PAX_FORMAT) as tf:
+                for path, arc, st in items:
+                    job.check()
+                    job.current = path
+                    try:
+                        ti = tf.gettarinfo(path, arc)
+                        if ti is None:
+                            continue
+                        if ti.isreg():
+                            with open(path, 'rb') as f:
+                                tf.addfile(ti, _JobReader(f, job))
+                            job.done_files += 1
+                        else:
+                            tf.addfile(ti)
+                    except OSError as e:
+                        job.fail(e)
+        if job.cancel:
+            raise Cancelled()
+        os.replace(tmp, dest)
+        ok = True
+    finally:
+        if not ok:
+            try:
+                os.unlink(tmp)
+            except OSError:
+                pass
+
+
+class _ProgressFile:
+    """A nyers archívumfájl olvasási pozíciója adja az előrehaladást (tömörített tarnál is)."""
+
+    def __init__(self, f, job, base):
+        self.f, self.job, self.base = f, job, base
+
+    def read(self, n=-1):
+        self.job.check()
+        b = self.f.read(n)
+        self.job.done_bytes = self.base + self.f.tell()
+        self.job.tick()
+        return b
+
+    def seek(self, *a):
+        return self.f.seek(*a)
+
+    def tell(self):
+        return self.f.tell()
+
+    def readable(self):
+        return True
+
+    def seekable(self):
+        return True
+
+    def close(self):
+        pass
+
+
+def safe_member(root, name):
+    """Az archívumbeli név célútvonala, vagy None, ha kilépne a célmappából (abszolút, '..', meghajtóbetű)."""
+    name = name.replace('\\', '/')
+    if name.startswith('/') or re.match(r'^[A-Za-z]:', name):
+        return None
+    parts = [x for x in name.split('/') if x not in ('', '.')]
+    if not parts or '..' in parts:
+        return None
+    return os.path.join(root, *parts)
+
+
+def _inside(path, root):
+    path, root = os.path.normpath(path), os.path.normpath(root)
+    return path == root or path.startswith(root.rstrip(os.sep) + os.sep)
+
+
+def _prepare_target(job, target, policy, is_dir):
+    """True, ha írhatunk a célba (a létezőt a szabály szerint kezeli)."""
+    if not os.path.lexists(target):
+        return True
+    if is_dir:
+        if os.path.isdir(target) and not os.path.islink(target):
+            return True
+        raise GCError('exists', target)
+    if policy == 'skip':
+        return False
+    if os.path.isdir(target) and not os.path.islink(target):
+        raise GCError('dir_exists', target)
+    os.unlink(target)
+    return True
+
+
+def _copy_stream(job, fi, target):
+    with open(target, 'wb') as fo:
+        while True:
+            job.check()
+            b = fi.read(1 << 20)
+            if not b:
+                break
+            fo.write(b)
+
+
+def unpack_zip(job, arc, root, policy):
+    with zipfile.ZipFile(arc) as zf:
+        infos = zf.infolist()
+        base = job.done_bytes
+        job.total_bytes += sum(i.file_size for i in infos)
+        job.total_files += sum(1 for i in infos if not i.is_dir())
+        for info in infos:
+            job.check()
+            target = safe_member(root, info.filename)
+            if target is None:
+                job.error(job.t('unsafe_path', info.filename))
+                continue
+            job.current = target
+            try:
+                if info.is_dir():
+                    if _prepare_target(job, target, policy, True):
+                        os.makedirs(target, exist_ok=True)
+                    continue
+                os.makedirs(os.path.dirname(target), exist_ok=True)
+                if _prepare_target(job, target, policy, False):
+                    with zf.open(info) as fi:
+                        _copy_stream(job, _JobReader(fi, job), target)
+                    mode = (info.external_attr >> 16) & 0o777
+                    if mode and not IS_WIN:
+                        os.chmod(target, mode | 0o200)
+                    t = time.mktime(info.date_time + (0, 0, -1))
+                    os.utime(target, (t, t))
+                job.done_files += 1
+            except (OSError, GCError) as e:
+                job.fail(e)
+            base += info.file_size
+            job.done_bytes = base
+            job.tick()
+
+
+def unpack_tar(job, arc, root, policy):
+    size = os.path.getsize(arc)
+    base = job.done_bytes
+    job.total_bytes += size
+    dirs = []
+    with open(arc, 'rb') as raw:
+        with tarfile.open(fileobj=_ProgressFile(raw, job, base), mode='r:*') as tf:
+            for m in tf:
+                job.check()
+                target = safe_member(root, m.name)
+                if target is None:
+                    job.error(job.t('unsafe_path', m.name))
+                    continue
+                job.current = target
+                try:
+                    if m.isdir():
+                        if _prepare_target(job, target, policy, True):
+                            os.makedirs(target, exist_ok=True)
+                            dirs.append((target, m))
+                        continue
+                    os.makedirs(os.path.dirname(target), exist_ok=True)
+                    if m.isreg():
+                        job.total_files += 1
+                        if _prepare_target(job, target, policy, False):
+                            _copy_stream(job, tf.extractfile(m), target)
+                            if not IS_WIN:
+                                os.chmod(target, (m.mode & 0o777) | 0o200)
+                            os.utime(target, (m.mtime, m.mtime))
+                        job.done_files += 1
+                    elif m.issym():
+                        link = os.path.join(os.path.dirname(target), m.linkname)
+                        if os.path.isabs(m.linkname) or not _inside(link, root):
+                            job.error(job.t('unsafe_path', '%s -> %s' % (m.name, m.linkname)))
+                        elif _prepare_target(job, target, policy, False):
+                            os.symlink(m.linkname, target)
+                    elif m.islnk():
+                        src = safe_member(root, m.linkname)
+                        if src is None:
+                            job.error(job.t('unsafe_path', '%s -> %s' % (m.name, m.linkname)))
+                        elif _prepare_target(job, target, policy, False):
+                            try:
+                                os.link(src, target)
+                            except OSError:
+                                shutil.copy2(src, target)
+                    # eszközfájlokat, FIFO-kat nem hozunk létre
+                except (OSError, GCError) as e:
+                    job.fail(e)
+    for target, m in reversed(dirs):    # a mappák jogai és dátuma a végén (különben nem írhatnánk beléjük)
+        try:
+            if not IS_WIN:
+                os.chmod(target, (m.mode & 0o777) | 0o700)
+            os.utime(target, (m.mtime, m.mtime))
+        except OSError:
+            pass
+    job.done_bytes = base + size
+
+
+def unpack_job(job, archives, dest, subdir, policy):
+    dest = norm(dest)
+    jobs = []
+    for a in map(norm, archives):
+        if zipfile.is_zipfile(a):
+            kind = 'zip'
+        elif tarfile.is_tarfile(a):
+            kind = 'tar'
+        else:
+            job.error(job.t('not_archive', a))
+            continue
+        root = os.path.join(dest, archive_base(os.path.basename(a))) if subdir else dest
+        jobs.append((kind, a, root))
+    job.set_running()
+    for kind, a, root in jobs:
+        job.check()
+        os.makedirs(root, exist_ok=True)
+        (unpack_zip if kind == 'zip' else unpack_tar)(job, a, root, policy)
+
+
 # ------------------------------------------------------------------ HTTP
 
 STATIC_TYPES = {'.html': 'text/html; charset=utf-8', '.js': 'application/javascript; charset=utf-8',
@@ -857,7 +1301,14 @@ class Handler(http.server.BaseHTTPRequestHandler):
         except http.cookies.CookieError:
             return False
         m = c.get('gc_session')
-        return bool(m and m.value in SESSIONS)
+        return bool(m and session_valid(m.value))
+
+    def client_ip(self):
+        ip = self.client_address[0]
+        fwd = self.headers.get('X-Forwarded-For')
+        if fwd and ip in ('127.0.0.1', '::1'):     # fordított proxy mögött a valódi kliens címe
+            ip = fwd.split(',')[-1].strip() or ip
+        return ip
 
     def do_GET(self):
         self.handle_req('GET')
@@ -871,7 +1322,8 @@ class Handler(http.server.BaseHTTPRequestHandler):
     def handle_req(self, method):
         url = urllib.parse.urlsplit(self.path)
         path = url.path
-        q = {k: v[-1] for k, v in urllib.parse.parse_qs(url.query, keep_blank_values=True).items()}
+        self.qm = urllib.parse.parse_qs(url.query, keep_blank_values=True)
+        q = {k: v[-1] for k, v in self.qm.items()}
         self.body = {}
         lang = self.headers.get('X-GC-Lang', '')
         self.lang = lang if lang in MSG else CONFIG['lang']
@@ -925,11 +1377,16 @@ class Handler(http.server.BaseHTTPRequestHandler):
     def api_login(self):
         if not auth_enabled():
             return self.send_json({'ok': True})
+        ip = self.client_ip()
+        wait = login_blocked(ip)
+        if wait:
+            return self.fail(self.t('too_many_logins', (wait + 59) // 60), 429)
         if not check_password(str(self.body.get('password', ''))):
+            login_failed(ip)
             time.sleep(1.0)
             return self.fail(self.t('wrong_password'), 403)
-        tok = secrets.token_urlsafe(32)
-        SESSIONS.add(tok)
+        login_ok(ip)
+        tok = session_new()
         self.send_json({'ok': True}, headers={
             'Set-Cookie': 'gc_session=%s; HttpOnly; SameSite=Strict; Path=/; Max-Age=2592000' % tok})
 
@@ -939,7 +1396,7 @@ class Handler(http.server.BaseHTTPRequestHandler):
             c.load(self.headers.get('Cookie', ''))
             m = c.get('gc_session')
             if m:
-                SESSIONS.discard(m.value)
+                session_drop(m.value)
         except http.cookies.CookieError:
             pass
         self.send_json({'ok': True}, headers={'Set-Cookie': 'gc_session=; Path=/; Max-Age=0'})
@@ -1040,6 +1497,8 @@ class Handler(http.server.BaseHTTPRequestHandler):
 
     def api_get_text(self, q):
         path = norm(q.get('path'))
+        if q.get('head') == '1':       # gyorsnézet: csak az eleje
+            return self.text_head(path)
         if os.path.getsize(path) > MAX_TEXT:
             raise GCError('text_too_big')
         with open(path, 'rb') as f:
@@ -1051,6 +1510,91 @@ class Handler(http.server.BaseHTTPRequestHandler):
         except UnicodeDecodeError:
             text, enc = data.decode('cp1250', errors='replace'), 'cp1250'
         self.send_json({'text': text, 'enc': enc, 'crlf': b'\r\n' in data, 'size': len(data)})
+
+    def text_head(self, path, limit=256 * 1024):
+        size = os.path.getsize(path)
+        with open(path, 'rb') as f:
+            data = f.read(limit)
+        if b'\0' in data[:8192]:
+            raise GCError('binary')
+        try:
+            text = data.decode('utf-8')
+        except UnicodeDecodeError as e:
+            if e.start >= len(data) - 3 and len(data) == limit:   # csak a vágás vitt ketté egy karaktert
+                text = data[:e.start].decode('utf-8', errors='replace')
+            else:
+                text = data.decode('cp1250', errors='replace')
+        self.send_json({'text': text, 'size': size, 'truncated': size > len(data)})
+
+    # --- kedvencek
+    def api_get_bookmarks(self, q):
+        items = load_state('bookmarks.json', [])
+        self.send_json({'items': items if isinstance(items, list) else []})
+
+    def api_post_bookmarks(self, q):
+        items = self.body.get('items')
+        if not isinstance(items, list):
+            raise GCError('bad_json')
+        clean = [str(x) for x in items if isinstance(x, str) and x][:200]
+        save_state('bookmarks.json', clean)
+        self.send_json({'items': clean})
+
+    # --- mappák letöltése zipként (folyamatos küldés, nem kell ideiglenes fájl)
+    def api_get_zip(self, q):
+        base = norm(q.get('dir'))
+        names = [n for n in self.qm.get('n', []) if n and n not in ('.', '..') and '/' not in n and not (IS_WIN and '\\' in n)]
+        if not names:
+            raise GCError('nothing_selected')
+        sources = [os.path.join(base, n) for n in names]
+        for src in sources:
+            if not os.path.lexists(src):
+                raise GCError('not_found', src)
+        fname = (names[0] if len(names) == 1 else (os.path.basename(base.rstrip('/\\')) or 'files')) + '.zip'
+        self.send_response(200)
+        self.send_header('Content-Type', 'application/zip')
+        self.send_header('Content-Disposition', "attachment; filename*=UTF-8''%s" % urllib.parse.quote(fname))
+        self.send_header('X-Content-Type-Options', 'nosniff')
+        self.send_header('Cache-Control', 'no-store')
+        self.send_header('Connection', 'close')
+        self.end_headers()
+        self.close_connection = True
+        out = _StreamOut(self.wfile)
+        errors = []
+        try:
+            with zipfile.ZipFile(out, 'w', allowZip64=True, strict_timestamps=False) as zf:
+                zip_items(zf, walk_items(sources), errors=errors)
+                if errors:
+                    zf.writestr('_errors.txt', '\n'.join([self.t('zip_errors')] + errors) + '\n')
+        except (BrokenPipeError, ConnectionResetError, ConnectionAbortedError):
+            pass
+
+    # --- tömörítés / kicsomagolás
+    def api_post_pack(self, q):
+        b = self.body
+        sources = b.get('sources')
+        if not isinstance(sources, list) or not sources:
+            raise GCError('nothing_selected')
+        fmt = b.get('format') or 'zip'
+        if fmt not in PACK_FORMATS:
+            raise GCError('bad_format', str(fmt))
+        dest = norm(b.get('dest'))
+        if os.path.lexists(dest):
+            raise GCError('exists', dest)
+        job = Job('pack', '%s: %s' % (self.t('job_pack'), dest), self.lang)
+        start_job(job, pack_job, sources, dest, fmt)
+        self.send_json({'id': job.id})
+
+    def api_post_unpack(self, q):
+        b = self.body
+        archives = b.get('archives')
+        if not isinstance(archives, list) or not archives:
+            raise GCError('nothing_selected')
+        dest = norm(b.get('dest'))
+        policy = 'skip' if b.get('policy') == 'skip' else 'overwrite'
+        what = os.path.basename(str(archives[0])) if len(archives) == 1 else items_text(self.lang, len(archives))
+        job = Job('unpack', '%s: %s → %s' % (self.t('job_unpack'), what, dest), self.lang)
+        start_job(job, unpack_job, archives, dest, bool(b.get('subdir')), policy)
+        self.send_json({'id': job.id})
 
     # --- műveletek
     def api_post_text(self, q):
@@ -1268,6 +1812,24 @@ def check_update(force=False):
             'newer': bool(latest and vtuple(latest) > vtuple(VERSION))}
 
 
+class _StreamOut:
+    """Csak írható kimenet a ZipFile-nak: a socketbe ír, a pozíciót számolja (seek nincs)."""
+
+    def __init__(self, w):
+        self.w, self.n = w, 0
+
+    def write(self, b):
+        self.w.write(b)
+        self.n += len(b)
+        return len(b)
+
+    def tell(self):
+        return self.n
+
+    def flush(self):
+        pass
+
+
 def lan_ips():
     ips = set()
     try:
@@ -1311,6 +1873,7 @@ def main():
     CONFIG['lang'] = a.lang
     CONFIG['update_check'] = not a.no_update_check and env('GC_UPDATE_CHECK', '1').strip().lower() not in ('0', 'no', 'false', 'off')
     CONFIG['repo'] = env('GC_REPO', DEFAULT_REPO).strip()
+    sessions_load()
 
     http.server.ThreadingHTTPServer.allow_reuse_address = True
     srv = http.server.ThreadingHTTPServer((a.host, a.port), Handler)

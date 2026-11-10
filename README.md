@@ -81,6 +81,16 @@ For an unattended install: `sudo bash install.sh --yes --lang en --user gabor --
   Files and folders dropped from your computer are uploaded.
 - F3 view, F4 text editor, F7 new folder, F8 delete, F9 **permissions** (chmod and chown), F2 rename,
   Ctrl+C/X/V. **F1** lists every shortcut.
+- **Download folders**: a folder or several selected items download as one zip (Shift+F3), built on the fly.
+- **Pack and unpack** (Alt+F5 / Alt+F9): zip, tar.gz, tar.xz, tar.bz2, in the background with progress.
+  Unpacking skips paths that would escape the target folder.
+- **Filter** (Ctrl+F): show only the items that contain the typed text or match a pattern (`*.jpg; *.png`).
+- **Favorite folders** (Ctrl+D, or the ★ button): stored on the server, so they are the same on every device.
+- **Quick view** (Ctrl+Q): the other panel previews the file under the cursor: image, video, audio, text, PDF.
+- **Light and dark theme**: *View → Theme*. Automatic mode follows the system setting.
+- **Phone and tablet**: one panel at a time with A/B tabs, bigger rows. Tap a row to put the cursor on it,
+  tap it again to open it, long-press to select.
+- Sign-ins survive restarts and updates, and repeated wrong passwords are blocked for 15 minutes.
 
 Try it without installing: `python3 server.py`, then open `http://SERVER_IP:28090/`.
 

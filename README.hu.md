@@ -81,6 +81,16 @@ Kérdések nélküli telepítés: `sudo bash install.sh --yes --lang hu --user g
   A gépedről ráhúzott fájlokat és mappákat feltölti.
 - F3 nézet, F4 szövegszerkesztő, F7 új mappa, F8 törlés, F9 **jogosultságok** (chmod és chown), F2 átnevezés,
   Ctrl+C/X/V. A teljes billentyűlista az **F1**-re jön elő.
+- **Mappák letöltése**: egy mappa vagy több kijelölt elem egyetlen zipként töltődik le (Shift+F3), menet közben készül.
+- **Tömörítés és kicsomagolás** (Alt+F5 / Alt+F9): zip, tar.gz, tar.xz, tar.bz2, háttérben, folyamatjelzővel.
+  Kicsomagoláskor a célmappából kivezető útvonalakat kihagyja.
+- **Szűrő** (Ctrl+F): csak a beírt szövegrészt tartalmazó vagy mintára illő elemek látszanak (`*.jpg; *.png`).
+- **Kedvenc mappák** (Ctrl+D vagy a ★ gomb): a szerveren tárolódnak, így minden eszközödön ugyanazok.
+- **Gyorsnézet** (Ctrl+Q): a másik panelen előnézet a kurzor alatti fájlról: kép, videó, hang, szöveg, PDF.
+- **Világos és sötét téma**: *Nézet → Téma*, automatikus módban a rendszer beállítását követi.
+- **Telefon és tablet**: egyszerre egy panel A/B fülekkel, nagyobb sorok. Koppintás: kurzor,
+  újabb koppintás: megnyitás, hosszan nyomva: kijelölés.
+- A bejelentkezés megmarad újraindítás és frissítés után is, a sok hibás jelszót pedig 15 percre letiltja.
 
 Kipróbálás telepítés nélkül: `python3 server.py --lang hu`, majd `http://SZERVER_IP:28090/`.
 

@@ -1,7 +1,8 @@
 /* Gabo Commander – kliens (keretrendszer nélkül) */
 'use strict';
 
-const ROW_H = 20;
+let ROW_H = 20;                     /* a CSS --row-h értéke (mobilon nagyobb) */
+const COARSE = matchMedia('(pointer: coarse)').matches;   /* érintőképernyő */
 const $ = (s, el = document) => el.querySelector(s);
 const esc = s => String(s == null ? '' : s).replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' })[c]);
 let collator, nf0, nf1, nf2;
@@ -175,6 +176,7 @@ class Panel {
       free: 0, total: 0, hist: [], hpos: -1, qs: '', qsT: 0,
       sel: new Set(), sizes: new Map(), pending: new Set(),
       pendingSingle: null, rdrag: false, rsel: true, dropEl: null,
+      filter: '', ptype: '', tapPrev: -1, lpTimer: 0, lpFired: false, lpX: 0, lpY: 0,
     });
     this.sort = store.get('sort.' + side, { key: 'n', dir: 1 });
     this.build();
@@ -190,6 +192,7 @@ class Panel {
         <div class="meter" title="${t('t_usage')}"><i></i></div>
         <span class="dk-free"></span>
         <span class="grow"></span>
+        <button class="mini" data-nav="fav" title="${t('tb_fav')}">★</button>
         <button class="mini" data-nav="root" title="${esc(t('t_root'))}">/</button>
         <button class="mini" data-nav="home" title="${t('t_home')}">~</button>
         <button class="mini" data-nav="up" title="${t('t_up')}">..</button>
@@ -197,6 +200,7 @@ class Panel {
       <div class="pathbar" title="${t('t_path')}"><span class="path-text"></span><input class="path-input" spellcheck="false" hidden></div>
       <div class="cols">${COLS.map(k => `<span class="c-${k}" data-k="${k}">${t('col_' + k)}</span>`).join('')}</div>
       <div class="list"><div class="spacer-v"></div><div class="rows"></div></div>
+      <div class="filterbar" hidden><span class="f-ic">⏷</span><input class="filter-input" spellcheck="false" autocomplete="off" placeholder="${esc(t('filter_ph'))}"><span class="f-count"></span><button class="mini f-close" title="${esc(t('filter_close'))}">✕</button></div>
       <div class="status"></div>`;
     const q = s => this.el.querySelector(s);
     this.driveEl = q('.drivebar');
@@ -210,11 +214,27 @@ class Panel {
     this.spacer = q('.spacer-v');
     this.rowsEl = q('.rows');
     this.statusEl = q('.status');
+    this.filterBar = q('.filterbar');
+    this.filterInput = q('.filter-input');
+    this.filterCount = q('.f-count');
     this.updateCols();
+
+    /* --- szűrő */
+    this.filterInput.addEventListener('input', () => this.setFilter(this.filterInput.value));
+    this.filterInput.addEventListener('keydown', e => {
+      e.stopPropagation();
+      if (e.key === 'Escape') { e.preventDefault(); this.clearFilter(); }
+      else if (e.key === 'Enter' || e.key === 'Tab') { e.preventDefault(); this.filterInput.blur(); }
+      else if (e.key === 'ArrowDown' || e.key === 'ArrowUp') {
+        e.preventDefault(); this.filterInput.blur(); this.move(e.key === 'ArrowDown' ? 1 : -1);
+      }
+    });
+    q('.f-close').addEventListener('click', () => this.clearFilter());
 
     this.el.addEventListener('mousedown', e => {
       setActive(this);
-      if (document.activeElement && document.activeElement !== this.pathInput && /INPUT|TEXTAREA|SELECT/.test(document.activeElement.tagName)) document.activeElement.blur();
+      const ae = document.activeElement;
+      if (ae && ae !== this.pathInput && ae !== this.filterInput && /INPUT|TEXTAREA|SELECT/.test(ae.tagName)) ae.blur();
       if (e.target === this.list || e.target === this.spacer) this.pendingSingle = null;
     }, true);
     this.list.addEventListener('scroll', () => this.render(), { passive: true });
@@ -225,7 +245,7 @@ class Panel {
     });
     q('.diskinfo').addEventListener('click', e => {
       const b = e.target.closest('[data-nav]');
-      if (b) run(() => this.nav(b.dataset.nav));
+      if (b) run(() => (b.dataset.nav === 'fav' ? favMenu(this) : this.nav(b.dataset.nav)));
     });
     this.dkBtn.addEventListener('click', () => run(() => driveMenu(this)));
     this.driveEl.addEventListener('click', e => {
@@ -243,12 +263,44 @@ class Panel {
     });
     this.pathInput.addEventListener('blur', () => this.endEditPath());
 
+    /* --- érintés: koppintás = kurzor, újabb koppintás = megnyitás, hosszan nyomva = kijelölés */
+    const lpCancel = () => { clearTimeout(this.lpTimer); this.lpTimer = 0; };
+    this.rowsEl.addEventListener('pointerdown', e => {
+      this.ptype = e.pointerType;
+      this.tapPrev = this.cursor;
+      this.lpFired = false;
+      lpCancel();
+      if (e.pointerType !== 'touch') return;
+      const row = e.target.closest('.row');
+      if (!row) return;
+      this.lpX = e.clientX; this.lpY = e.clientY;
+      this.lpTimer = setTimeout(() => {
+        this.lpTimer = 0;
+        const i = +row.dataset.i, ent = this.view[i];
+        if (!ent) return;
+        this.lpFired = true;
+        this.cursor = i;
+        if (!ent.up) this.setSel(ent, !this.sel.has(ent.n));
+        if (navigator.vibrate) navigator.vibrate(15);
+        this.render(); this.updateStatus();
+      }, 500);
+    });
+    this.rowsEl.addEventListener('pointermove', e => {
+      if (this.lpTimer && Math.hypot(e.clientX - this.lpX, e.clientY - this.lpY) > 10) lpCancel();
+    });
+    this.rowsEl.addEventListener('pointerup', lpCancel);
+    this.rowsEl.addEventListener('pointercancel', lpCancel);
+
     /* --- egér */
     this.rowsEl.addEventListener('mousedown', e => {
       const row = e.target.closest('.row');
       if (!row) return;
       const i = +row.dataset.i, ent = this.view[i];
       if (!ent) return;
+      if (this.ptype === 'touch') {               // érintésnél a kijelölést nem bántjuk
+        if (e.button === 0 && !this.lpFired) { this.cursor = i; this.render(); this.updateStatus(); }
+        return;
+      }
       if (e.button === 2) {                      // jobb gomb: kijelölés (TC-stílus, húzva is)
         e.preventDefault();
         this.cursor = i;
@@ -285,6 +337,12 @@ class Panel {
     });
     this.rowsEl.addEventListener('click', e => {
       const row = e.target.closest('.row');
+      if (row && this.ptype === 'touch') {
+        if (this.lpFired) { this.lpFired = false; return; }
+        const i = +row.dataset.i;
+        if (i === this.tapPrev) run(() => this.open(i));
+        return;
+      }
       if (!row || this.pendingSingle == null) return;
       const ent = this.view[+row.dataset.i];
       if (+row.dataset.i === this.pendingSingle && ent && !ent.up && !e.ctrlKey && !e.shiftKey) {
@@ -294,6 +352,7 @@ class Panel {
       this.pendingSingle = null;
     });
     this.rowsEl.addEventListener('dblclick', e => {
+      if (this.ptype === 'touch') return;
       const row = e.target.closest('.row');
       if (row) run(() => this.open(+row.dataset.i));
     });
@@ -388,6 +447,7 @@ class Panel {
     if (!same) {
       this.cursor = 0;
       this.sel.clear(); this.sizes.clear(); this.pending.clear(); this.quickReset(true);
+      this.filter = ''; this.filterBar.hidden = true;
       if (push) { this.hist = this.hist.slice(0, this.hpos + 1); this.hist.push(d.path); if (this.hist.length > 100) this.hist.shift(); this.hpos = this.hist.length - 1; }
     }
     this.rebuild(keep);
@@ -403,7 +463,9 @@ class Panel {
 
   rebuild(focusName) {
     const { key, dir } = this.sort;
-    const arr = this.entries.filter(e => showHidden || e.n[0] !== '.');
+    const fre = this.filterRe();
+    const arr = this.entries.filter(e => (showHidden || e.n[0] !== '.') && (!fre || fre.test(e.n)));
+    if (fre) this.filterCount.textContent = t('filter_count', arr.length, this.entries.filter(e => showHidden || e.n[0] !== '.').length);
     const val = {
       e: e => e.ext.toLowerCase(),
       s: e => (e.d ? (this.sizes.has(e.n) ? this.sizes.get(e.n) : -1) : e.s),
@@ -427,6 +489,35 @@ class Panel {
     const c = focusName != null ? arr.findIndex(e => e.n === focusName) : -1;
     this.cursor = c >= 0 ? c : Math.max(0, Math.min(this.cursor, arr.length - 1));
     this.updateStatus();
+  }
+
+  /* --- szűrő: szövegrész (kis/nagybetű mindegy) vagy minta (*, ?), több is ; vagy szóköz között */
+  filterRe() {
+    const f = this.filter.trim();
+    if (!f) return null;
+    const parts = f.split(/[;,\s]+/).filter(Boolean).map(g => {
+      const x = g.replace(/[.+^${}()|[\]\\]/g, '\\$&').replace(/\*/g, '.*').replace(/\?/g, '.');
+      return /[*?]/.test(g) ? '^' + x + '$' : x;
+    });
+    return new RegExp(parts.join('|'), 'i');
+  }
+  openFilter() {
+    this.filterBar.hidden = false;
+    this.filterInput.value = this.filter;
+    this.filterInput.focus();
+    this.filterInput.select();
+    this.render();
+  }
+  setFilter(v) {
+    this.filter = v;
+    const cur = this.view[this.cursor];
+    this.rebuild(cur && cur.n);
+    this.ensureVisible(); this.render();
+  }
+  clearFilter() {
+    this.filterInput.blur();
+    this.filterBar.hidden = true;
+    if (this.filter) this.setFilter('');
   }
 
   setSort(k) {
@@ -466,7 +557,7 @@ class Panel {
       if (el._key !== key) {
         el._key = key;
         el.dataset.i = i;
-        el.draggable = !e.up;
+        el.draggable = !e.up && !COARSE;
         el.innerHTML = this.rowInner(e);
         el.title = e.up ? t('parent_dir') : e.n + (e.t ? '  →  ' + e.t : '') + (e.d ? '' : '\n' + fmtBytes(e.s));
       }
@@ -479,6 +570,7 @@ class Panel {
       if (el === this.dropEl) cls += ' drop';
       if (el.className !== cls) el.className = cls;
     }
+    if (qv.on && this === active) qvSchedule();
   }
 
   rowInner(e) {
@@ -500,6 +592,8 @@ class Panel {
     this.dkFree.textContent = this.total ? t('disk_free', fmtSize(this.free), fmtSize(this.total), Math.round(used * 100)) : '';
     const d = driveOf(this.path, false);
     this.dkBtn.innerHTML = `${SVG[d ? d.kind : 'hdd'] || SVG.hdd}<span>${esc(d ? d.path : '?')}</span> ▾`;
+    const tab = $('#ptab' + this.side);
+    if (tab) tab.textContent = baseName(this.path) || this.path;
     this.updateDrives();
   }
 
@@ -663,6 +757,8 @@ class Panel {
 
 function setActive(p) {
   if (!p || active === p) return;
+  if (qv.on && p === qv.target) return;      // a gyorsnézet panelje nem lehet aktív
+  for (const s of ['L', 'R']) { const b = $(`[data-cmd=tab${s}]`); if (b) b.classList.toggle('on', p.side === s); }
   active = p;
   for (const x of Object.values(panels)) { x.el.classList.toggle('active', x === p); x.render(); }
   store.set('active', p.side);
@@ -826,14 +922,208 @@ function cmdView() {
 }
 
 function cmdDownload() {
-  const p = active, items = p.targets().filter(e => !e.d);
-  if (!items.length) { toast(t('download_nofile'), 'err'); return; }
-  items.forEach((e, i) => setTimeout(() => {
-    const a = document.createElement('a');
-    a.href = rawUrl(pjoin(p.path, e.n), true);
-    a.download = e.n;
-    document.body.appendChild(a); a.click(); a.remove();
-  }, i * 300));
+  const p = active, items = p.targets();
+  if (!items.length) return;
+  const a = document.createElement('a');
+  if (items.length === 1 && !items[0].d) {
+    a.href = rawUrl(pjoin(p.path, items[0].n), true);
+    a.download = items[0].n;
+  } else {                                     // mappa vagy több elem: egyetlen zip, menet közben készül
+    const q = new URLSearchParams({ dir: p.path });
+    items.forEach(e => q.append('n', e.n));
+    a.href = '/api/zip?' + q;
+  }
+  document.body.appendChild(a); a.click(); a.remove();
+}
+
+/* ------------------------------------------------------------ tömörítés / kicsomagolás */
+const PACK_FMTS = ['zip', 'tar.gz', 'tar.xz', 'tar'];
+const ARCH_RE = /\.(zip|tar|tgz|txz|tbz2?|tar\.(gz|xz|bz2))$/i;
+
+async function cmdPack() {
+  const p = active, items = p.targets();
+  if (!items.length) return;
+  let fmt = store.get('packfmt', 'zip');
+  if (!PACK_FMTS.includes(fmt)) fmt = 'zip';
+  const base = items.length === 1 ? (items[0].d ? items[0].n : items[0].base) : (baseName(p.path) || 'archive');
+  const what = items.length === 1 ? t('quoted', items[0].n) : t('n_items', items.length);
+  const r = await modal({
+    title: t('pack_title'), ok: t('pack_btn'),
+    body: `<label>${t('pack_what', esc(what))}<input name="dest" value="${esc(pjoin(p.other.path, base + '.' + fmt))}"></label>
+           <label>${t('pack_format')}<select name="format">${PACK_FMTS.map(f => `<option${f === fmt ? ' selected' : ''}>${f}</option>`).join('')}</select></label>`,
+    onOpen(f) {
+      const sel = f.elements.format, inp = f.elements.dest;
+      sel.addEventListener('change', () => {
+        const v = inp.value, old = PACK_FMTS.find(x => v.endsWith('.' + x));
+        inp.value = (old ? v.slice(0, -old.length) : v + '.') + sel.value;
+      });
+    },
+  });
+  if (!r || !r.dest.trim()) return;
+  let dest = r.dest.trim();
+  if (!isAbs(dest)) dest = pjoin(p.path, dest);
+  store.set('packfmt', r.format);
+  await POST('/api/pack', { sources: items.map(e => pjoin(p.path, e.n)), dest, format: r.format });
+  p.selectNone();
+  pollSoon();
+}
+
+async function cmdUnpack() {
+  const p = active, items = p.targets().filter(e => !e.d && ARCH_RE.test(e.n));
+  if (!items.length) { toast(t('unpack_none'), 'err'); return; }
+  const what = items.length === 1 ? t('quoted', items[0].n) : t('n_items', items.length);
+  const pol = store.get('unpackpol', 'overwrite');
+  const r = await modal({
+    title: t('unpack_title'), ok: t('unpack_btn'),
+    body: `<label>${t('unpack_to', esc(what))}<input name="dest" value="${esc(p.other.path)}"></label>
+           <label class="chk"><input type="checkbox" name="subdir"${store.get('unpacksub', true) ? ' checked' : ''}> ${t('unpack_subdir')}</label>
+           <label>${t('if_exists')}<select name="policy"><option value="overwrite">${esc(t('pol_overwrite'))}</option><option value="skip"${pol === 'skip' ? ' selected' : ''}>${esc(t('pol_skip'))}</option></select></label>`,
+  });
+  if (!r || !r.dest.trim()) return;
+  let dest = r.dest.trim();
+  if (!isAbs(dest)) dest = pjoin(p.path, dest);
+  store.set('unpacksub', !!r.subdir);
+  store.set('unpackpol', r.policy);
+  await POST('/api/unpack', { archives: items.map(e => pjoin(p.path, e.n)), dest, subdir: !!r.subdir, policy: r.policy });
+  p.selectNone();
+  pollSoon();
+}
+
+/* ------------------------------------------------------------ kedvenc mappák (a szerveren tárolva, minden eszközön ugyanaz) */
+let FAVS = null;
+async function favLoad() {
+  if (FAVS == null) { try { FAVS = (await GET('/api/bookmarks')).items; } catch (e) { FAVS = []; } }
+  return FAVS;
+}
+async function favSave(items) { FAVS = (await POST('/api/bookmarks', { items })).items; }
+
+async function favAdd(p = active) {
+  const list = await favLoad();
+  if (list.includes(p.path)) { toast(t('fav_exists')); return; }
+  await favSave(list.concat([p.path]));
+  toast(t('fav_added', p.path), 'ok');
+}
+
+async function favMenu(p = active) {
+  setActive(p);
+  p = active;
+  await favLoad();
+  const STAR = '<svg viewBox="0 0 16 16"><path d="M8 1.3l2 4.3 4.7.5-3.5 3.2 1 4.6L8 11.5l-4.2 2.4 1-4.6L1.3 6.1 6 5.6z" fill="#ffc83d" stroke="#b07d00"/></svg>';
+  const r = await modal({
+    title: t('fav_title'), cls: 'favs',
+    buttons: [
+      { label: t('fav_add_btn'), action: (close, form) => run(async () => { await favAdd(p); form._draw(); }) },
+      { label: t('close'), value: null },
+    ],
+    body: '<div class="fav-list"></div>',
+    onOpen(form, close) {
+      const box = form.querySelector('.fav-list');
+      form._draw = (focus = 0) => {
+        box.innerHTML = FAVS.length
+          ? FAVS.map((f, i) => `<button type="button" class="menu-drv fav" data-i="${i}">${STAR}<span>${esc(baseName(f) || f)}</span><span class="m-free"><bdi>${esc(f)}</bdi></span><span class="fav-del" data-del="${i}" title="${esc(t('fav_remove'))}">✕</span></button>`).join('')
+            + `<p class="hint">${t('fav_hint')}</p>`
+          : `<p class="hint">${t('fav_empty')}</p>`;
+        const bs = box.querySelectorAll('.fav');
+        if (bs.length) bs[Math.min(focus, bs.length - 1)].focus();
+      };
+      form._del = i => run(async () => { await favSave(FAVS.filter((_, k) => k !== i)); form._draw(i); });
+      box.addEventListener('click', e => {
+        const d = e.target.closest('[data-del]');
+        if (d) { form._del(+d.dataset.del); return; }
+        const b = e.target.closest('.fav');
+        if (b) close(FAVS[+b.dataset.i]);
+      });
+      form._draw();
+    },
+    onKey(ev, close, form) {
+      const bs = [...form.querySelectorAll('.fav')];
+      const i = bs.indexOf(document.activeElement);
+      if (ev.key === 'ArrowDown' || ev.key === 'ArrowUp') {
+        ev.preventDefault();
+        if (bs.length) bs[(i + (ev.key === 'ArrowDown' ? 1 : -1) + bs.length) % bs.length].focus();
+        return true;
+      }
+      if (ev.key === 'Delete' && i >= 0) { ev.preventDefault(); form._del(i); return true; }
+      return false;
+    },
+  });
+  if (r) await p.load(r._btn);
+}
+
+/* ------------------------------------------------------------ gyorsnézet (Ctrl+Q): a másik panelen előnézet */
+const qv = { on: false, target: null, box: null, key: '', timer: 0 };
+const QV_IMG = new Set('jpg jpeg png gif bmp webp svg ico avif'.split(' '));
+const QV_VIDEO = new Set('mp4 webm mkv mov m4v ogv'.split(' '));
+const QV_AUDIO = new Set('mp3 wav flac ogg opus m4a aac'.split(' '));
+
+function qvToggle() {
+  if (qv.on) { qvClose(); return; }
+  if (!active) return;
+  qv.on = true;
+  qv.target = active.other;
+  qv.box = document.createElement('div');
+  qv.box.className = 'qv';
+  qv.target.el.appendChild(qv.box);
+  qv.target.el.classList.add('qv-target');
+  qv.key = '';
+  $('[data-cmd=qview]').classList.add('on');
+  qvUpdate();
+}
+
+function qvClose() {
+  if (qv.box) qv.box.remove();
+  if (qv.target) qv.target.el.classList.remove('qv-target');
+  Object.assign(qv, { on: false, target: null, box: null, key: '' });
+  $('[data-cmd=qview]').classList.remove('on');
+}
+
+function qvSchedule() { clearTimeout(qv.timer); qv.timer = setTimeout(qvUpdate, 120); }
+
+async function qvUpdate() {
+  if (!qv.on || !active) return;
+  const p = active, e = p.view[p.cursor];
+  const path = e && !e.up ? pjoin(p.path, e.n) : '';
+  const key = path + '|' + (e ? e.m : '') + '|' + (e && e.d ? p.sizes.get(e.n) : '');
+  if (key === qv.key) return;
+  qv.key = key;
+  const box = qv.box;
+  if (!e || e.up) { box.innerHTML = `<div class="qv-msg">${esc(p.path)}</div>`; return; }
+  const head = `<div class="qv-head">${icon(e)}<b>${esc(e.n)}</b><span>${e.d ? '' : esc(fmtSize(e.s))}</span><span>${esc(fmtDate(e.m))}</span></div>`;
+  const ext = e.ext.toLowerCase(), url = esc(rawUrl(path));
+  if (e.d) {
+    box.innerHTML = head + `<div class="qv-msg">${p.sizes.has(e.n) ? esc(t('qv_dir_size', fmtSize(p.sizes.get(e.n)))) : esc(t('qv_dir'))}</div>`;
+  } else if (QV_IMG.has(ext)) {
+    box.innerHTML = head + `<div class="qv-media"><img src="${url}" alt=""></div>`;
+  } else if (QV_VIDEO.has(ext)) {
+    box.innerHTML = head + `<div class="qv-media"><video src="${url}" controls preload="metadata"></video></div>`;
+  } else if (QV_AUDIO.has(ext)) {
+    box.innerHTML = head + `<div class="qv-media"><audio src="${url}" controls preload="metadata"></audio></div>`;
+  } else if (ext === 'pdf') {
+    box.innerHTML = head + `<iframe class="qv-frame" src="${url}"></iframe>`;
+  } else {
+    box.innerHTML = head + '<pre class="qv-text">…</pre>';
+    const pre = box.querySelector('.qv-text');
+    try {
+      const r = await GET('/api/text', { path, head: '1' });
+      if (qv.key === key) pre.textContent = r.text + (r.truncated ? '\n…' : '');
+    } catch (err) {
+      if (qv.key === key) pre.outerHTML = `<div class="qv-msg">${esc(err.message)}</div>`;
+    }
+  }
+}
+
+/* ------------------------------------------------------------ téma és sorhossz */
+function applyTheme(m) {
+  document.documentElement.dataset.theme = ['light', 'dark'].includes(m) ? m : 'auto';
+}
+function setTheme(m) { store.set('theme', m); applyTheme(m); }
+
+function updateRowH() {
+  const v = parseFloat(getComputedStyle(document.documentElement).getPropertyValue('--row-h'));
+  const n = v > 0 ? v : 20;
+  if (n === ROW_H) return;
+  ROW_H = n;
+  for (const p of Object.values(panels)) { p.gen++; p.ensureVisible(); p.render(); }
 }
 
 async function cmdEdit(path) {
@@ -1021,6 +1311,10 @@ function cmdHelp() {
       ${K('F5 / F6', t('h_copy'))}
       ${K('F7 / F8, Delete', t('h_mkdir'))}
       ${K('F9', t('h_chmod'))}
+      ${K('Alt+F5 / Alt+F9', t('h_pack'))}
+      ${K('Ctrl+F', t('h_filter'))}
+      ${K('Ctrl+D', t('h_fav'))}
+      ${K('Ctrl+Q', t('h_qview'))}
       ${K('Ctrl+C / Ctrl+X / Ctrl+V', t('h_clip'))}
       ${K('Alt+F1 / Alt+F2', t('h_drives'))}
       ${K('F10', t('h_menu'))}
@@ -1054,6 +1348,10 @@ const CMD = {
   drvL: () => driveMenu(panels.L), drvR: () => driveMenu(panels.R),
   sort_n: () => active.setSort('n'), sort_e: () => active.setSort('e'), sort_s: () => active.setSort('s'), sort_m: () => active.setSort('m'),
   about: cmdAbout, update: () => cmdUpdate(true),
+  filter: () => active.openFilter(), fav: () => favMenu(active), favadd: () => favAdd(active), qview: qvToggle,
+  pack: cmdPack, unpack: cmdUnpack,
+  theme_auto: () => setTheme('auto'), theme_light: () => setTheme('light'), theme_dark: () => setTheme('dark'),
+  tabL: () => setActive(panels.L), tabR: () => setActive(panels.R),
   lang_hu: () => switchLang('hu'), lang_en: () => switchLang('en'),
   logout: async () => { await POST('/api/logout'); location.reload(); },
 };
@@ -1115,6 +1413,7 @@ const MENUS = [
     ['mi_rename', 'rename', 'F2'], ['mi_view', 'view', 'F3'], ['mi_edit', 'edit', 'F4'], ['mi_newfile', 'newfile', 'Shift+F4'], '-',
     ['mi_copy', 'copy', 'F5'], ['mi_move', 'move', 'F6'], ['mi_mkdir', 'mkdir', 'F7'], ['mi_del', 'del', 'F8'], '-',
     ['mi_chmod', 'chmod', 'F9'], '-',
+    ['mi_pack', 'pack', 'Alt+F5'], ['mi_unpack', 'unpack', 'Alt+F9'], '-',
     ['mi_upload', 'upload', ''], ['mi_download', 'download', 'Shift+F3'], '-',
     ['mi_logout', 'logout', ''],
   ]],
@@ -1126,14 +1425,19 @@ const MENUS = [
   ['m_commands', [
     ['mi_refresh', 'refresh', 'Ctrl+R'], ['mi_swap', 'swap', 'Ctrl+U'], ['mi_same', 'same', 'Ctrl+='], '-',
     ['mi_root', 'root', 'Ctrl+\\'], ['mi_home', 'home', ''], ['mi_up', 'up', 'Backspace'], '-',
-    ['mi_drvL', 'drvL', 'Alt+F1'], ['mi_drvR', 'drvR', 'Alt+F2'],
+    ['mi_drvL', 'drvL', 'Alt+F1'], ['mi_drvR', 'drvR', 'Alt+F2'], '-',
+    ['mi_fav', 'fav', 'Ctrl+D'], ['mi_favadd', 'favadd', ''],
   ]],
   ['m_view', [
-    ['mi_hidden', 'hidden', 'Ctrl+H', () => showHidden], '-',
+    ['mi_hidden', 'hidden', 'Ctrl+H', () => showHidden],
+    ['mi_filter', 'filter', 'Ctrl+F'], ['mi_qview', 'qview', 'Ctrl+Q', () => qv.on], '-',
     ['mi_sort_n', 'sort_n', '', () => active && active.sort.key === 'n'],
     ['mi_sort_e', 'sort_e', '', () => active && active.sort.key === 'e'],
     ['mi_sort_s', 'sort_s', '', () => active && active.sort.key === 's'],
     ['mi_sort_m', 'sort_m', '', () => active && active.sort.key === 'm'], '-',
+    ['mi_theme_auto', 'theme_auto', '', () => document.documentElement.dataset.theme === 'auto'],
+    ['mi_theme_light', 'theme_light', '', () => document.documentElement.dataset.theme === 'light'],
+    ['mi_theme_dark', 'theme_dark', '', () => document.documentElement.dataset.theme === 'dark'], '-',
     [LANGS.hu, 'lang_hu', '', () => LANG === 'hu'],
     [LANGS.en, 'lang_en', '', () => LANG === 'en'],
   ]],
@@ -1517,21 +1821,24 @@ document.addEventListener('keydown', e => {
     case ' ': return go(() => p.toggleCur(true));
     case 'Insert': return go(() => p.toggleCur(false));
     case 'Delete': return go(CMD.del);
-    case 'Escape': return go(() => (p.qs ? p.quickReset() : p.selectNone()));
+    case 'Escape': return go(() => (p.qs ? p.quickReset() : p.filter ? p.clearFilter() : p.selectNone()));
     case 'F1': return go(alt ? () => driveMenu(panels.L) : CMD.help);
     case 'F2': return go(alt ? () => driveMenu(panels.R) : CMD.rename);
     case 'F3': return go(sh ? CMD.download : CMD.view);
     case 'F4': return go(sh ? CMD.newfile : CMD.edit);
-    case 'F5': return go(CMD.copy);
+    case 'F5': return go(alt ? CMD.pack : CMD.copy);
     case 'F6': return go(sh ? CMD.rename : CMD.move);
     case 'F7': return go(CMD.mkdir);
     case 'F8': return go(CMD.del);
-    case 'F9': return go(CMD.chmod);
+    case 'F9': return go(alt ? CMD.unpack : CMD.chmod);
     default: break;
   }
   if (ctrl && !alt) {
     switch (k.toLowerCase()) {
       case 'a': return go(() => p.selectAll());
+      case 'f': return go(CMD.filter);
+      case 'd': return go(CMD.fav);
+      case 'q': return go(CMD.qview);
       case 'r': return go(CMD.refresh);
       case 'h': return go(CMD.hidden);
       case 'u': return go(CMD.swap);
@@ -1575,6 +1882,8 @@ window.addEventListener('focus', () => {
 /* ------------------------------------------------------------ indulás */
 async function init() {
   INFO = await GET('/api/info');
+  updateRowH();
+  addEventListener('resize', () => { clearTimeout(updateRowH.t); updateRowH.t = setTimeout(updateRowH, 150); });
   if (store.get('lang', null) == null && INFO.lang && INFO.lang !== LANG) setLang(INFO.lang);
   applyI18n();
   $('#ver').textContent = 'v' + INFO.version;

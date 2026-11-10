@@ -320,6 +320,8 @@ Wants=network-online.target
 User=$NEW_USER
 EnvironmentFile=-$ENV_FILE
 Environment=PYTHONDONTWRITEBYTECODE=1 PYTHONUNBUFFERED=1
+StateDirectory=gabo-commander
+StateDirectoryMode=0700
 ExecStart=$PYTHON $DEST/server.py
 Restart=on-failure
 RestartSec=2

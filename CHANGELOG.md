@@ -5,6 +5,18 @@
 
 ## Unreleased
 
+- Download folders and multiple items as one zip (Shift+F3). · Mappák és több elem letöltése egy zipként (Shift+F3).
+- Pack / unpack: zip, tar.gz, tar.xz, tar.bz2 (Alt+F5 / Alt+F9). · Tömörítés / kicsomagolás: zip, tar.gz, tar.xz, tar.bz2 (Alt+F5 / Alt+F9).
+- Filter in the panel (Ctrl+F). · Szűrő a panelen (Ctrl+F).
+- Favorite folders, stored on the server (Ctrl+D). · Kedvenc mappák, a szerveren tárolva (Ctrl+D).
+- Quick view of images, video, audio, text and PDF in the other panel (Ctrl+Q).
+  · Gyorsnézet a másik panelen: kép, videó, hang, szöveg, PDF (Ctrl+Q).
+- Dark theme (automatic, light, dark). · Sötét téma (automatikus, világos, sötét).
+- Phone layout: one panel with A/B tabs, bigger rows, tap / long-press.
+  · Telefonos nézet: egy panel A/B fülekkel, nagyobb sorok, koppintás / hosszú nyomás.
+- Sign-ins survive restarts and updates; too many wrong passwords block the address for 15 minutes.
+  · A bejelentkezés megmarad újraindítás és frissítés után; a sok hibás jelszó 15 percre letiltja a címet.
+
 ## 1.1.1 – 2026-11-10
 
 - MIT license. · MIT licenc.
