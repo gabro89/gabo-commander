@@ -102,8 +102,14 @@ Ha internetről is el akarod érni, **ne nyisd ki közvetlenül a portot**. Két
 
 ## Új verzió kiadása (fejlesztőknek)
 
-1. A `VERSION` fájlban emeld a számot (pl. `1.1.0` → `1.2.0`), és írd be a változásokat a `CHANGELOG.md`-be.
-2. `git commit`, majd `git push` (és ha szeretnéd: `git tag v1.2.0 && git push --tags`).
+1. Fejlesztés közben a változásokat a `CHANGELOG.md` `## Unreleased` része alá írd. Ez nem kötelező:
+   ha üresen marad, a commitüzenetekből készül a lista.
+2. Kiadás egy paranccsal (Windowson Git Bashből):
+   ```bash
+   ./release.sh            # patch: 1.1.0 → 1.1.1   (vagy: minor, major, pontos szám pl. 1.4.0; --dry-run: csak megmutatja)
+   ```
+   Átírja a `VERSION`-t és a `CHANGELOG.md`-t, commitol, létrehozza a `vX.Y.Z` taget, és mindent feltölt.
+   Utána a GitHub Actions elkészíti a kiadás oldalát a *Releases* alatt.
 3. A szervereken néhány órán belül megjelenik a frissítésjelzés. A szerveren a `sudo gabo-commander update` telepíti.
 
 ## Fájlok
@@ -115,3 +121,8 @@ Ha internetről is el akarod érni, **ne nyisd ki közvetlenül a portot**. Két
 | `install.sh` | telepítő varázsló / újratelepítés systemd szolgáltatásként |
 | `gabo-commander.sh` | a `gabo-commander` kezelő parancs (update, status, config…) |
 | `VERSION`, `CHANGELOG.md` | verziószám és változásnapló |
+| `release.sh` | új verzió kiadása (fejlesztői eszköz) |
+
+## Licenc
+
+[MIT](LICENSE)

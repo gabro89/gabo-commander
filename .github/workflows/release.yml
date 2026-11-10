@@ -1,0 +1,40 @@
+name: release
+
+# Every pushed version tag (vX.Y.Z) gets a GitHub Release page with its CHANGELOG section.
+# Tags that have no release yet (e.g. older ones) are filled in as well.
+on:
+  push:
+    tags: ['v*']
+
+permissions:
+  contents: write
+
+jobs:
+  release:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: The VERSION file matches the tag
+        run: |
+          test "v$(tr -d '[:space:]' < VERSION)" = "$GITHUB_REF_NAME" || {
+            echo "::error::VERSION ($(cat VERSION)) does not match the tag $GITHUB_REF_NAME"; exit 1; }
+
+      - name: Create the missing releases
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          for tag in $(git tag -l 'v*' --sort=version:refname); do
+            if gh release view "$tag" >/dev/null 2>&1; then continue; fi
+            v="${tag#v}"
+            # the CHANGELOG section of this version, as it is in the tagged commit
+            git show "$tag:CHANGELOG.md" 2>/dev/null | awk -v h="## $v" '
+              /^## / { if (p) exit; if ($0 == h || index($0, h " ") == 1) { p = 1; next } }
+              p' > notes.md || true
+            grep -q '[^[:space:]]' notes.md || echo "Gabo Commander $v" > notes.md
+            latest=false; [ "$tag" = "$GITHUB_REF_NAME" ] && latest=true
+            gh release create "$tag" --verify-tag --title "Gabo Commander $v" --notes-file notes.md --latest="$latest"
+            echo "created $tag"
+          done

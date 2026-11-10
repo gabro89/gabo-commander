@@ -153,7 +153,7 @@ env_get() {   # a mentett érték idézőjelek nélkül
 unit_get() { [ -f "$UNIT" ] && sed -n "s/^$1//p" "$UNIT" | tail -n 1 || true; }
 
 CUR_USER="$(unit_get 'User=')"
-CUR_PORT="$(env_get GC_PORT)"; [ -n "$CUR_PORT" ] || CUR_PORT="$(unit_get 'Environment=GC_PORT=')"
+CUR_PORT="$(env_get GC_PORT)"
 CUR_HOST="$(env_get GC_HOST)"
 CUR_LANG="$(env_get GC_LANG)"
 CUR_UPD="$(env_get GC_UPDATE_CHECK)"
@@ -228,10 +228,10 @@ prepare_source() {
   if [ -e "$DEST" ]; then
     if [ -d "$DEST/.git" ]; then
       rm -rf "$DEST"
-    else   # régi, git nélküli telepítés: félretesszük
-      local bak; bak="$DEST.old-$(date +%Y%m%d-%H%M%S)"
+    else   # nem tőlünk származó mappa: nem töröljük, csak félretesszük
+      local bak; bak="$DEST.bak-$(date +%Y%m%d-%H%M%S)"
       mv "$DEST" "$bak"
-      info "A régi telepítés ide került: $bak" "The old installation was moved to: $bak"
+      info "A már létező $DEST mappa ide került: $bak" "The existing $DEST folder was moved to: $bak"
     fi
   fi
   mv "$tmp" "$DEST"

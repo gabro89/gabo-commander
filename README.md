@@ -102,8 +102,14 @@ If you want to reach it from the internet, **do not open the port directly**. Tw
 
 ## Releasing a new version (for the developer)
 
-1. Raise the number in the `VERSION` file (e.g. `1.1.0` → `1.2.0`) and add a section to `CHANGELOG.md`.
-2. `git commit` and `git push` (optionally `git tag v1.2.0 && git push --tags`).
+1. While developing, note the changes under `## Unreleased` in `CHANGELOG.md` (optional: if it is empty,
+   the commit messages are used).
+2. Release with one command (on Windows from Git Bash):
+   ```bash
+   ./release.sh            # patch: 1.1.0 → 1.1.1   (also: minor, major, or an exact 1.4.0; --dry-run to preview)
+   ```
+   It updates `VERSION` and `CHANGELOG.md`, commits, creates the `vX.Y.Z` tag and pushes everything.
+   GitHub Actions then creates the release page under *Releases*.
 3. Servers show the update badge within a few hours. On the server, `sudo gabo-commander update` installs it.
 
 ## Files
@@ -115,3 +121,8 @@ If you want to reach it from the internet, **do not open the port directly**. Tw
 | `install.sh` | setup wizard / reinstall as a systemd service |
 | `gabo-commander.sh` | the `gabo-commander` management command (update, status, config…) |
 | `VERSION`, `CHANGELOG.md` | version number and change history |
+| `release.sh` | releases a new version (developer tool) |
+
+## License
+
+[MIT](LICENSE)
