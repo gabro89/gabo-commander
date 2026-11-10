@@ -5,6 +5,8 @@
 
 ## Unreleased
 
+## 1.1.1 – 2026-11-10
+
 - MIT license. · MIT licenc.
 - `release.sh`: one command to release a version (VERSION, CHANGELOG, commit, tag, push).
   · `release.sh`: egy paranccsal kiadható egy verzió (VERSION, CHANGELOG, commit, tag, push).
