@@ -97,7 +97,7 @@ MSG = {
         'zip_errors': 'Ezeket nem sikerült beletenni:',
         'bad_name_x': 'Érvénytelen név: {0}', 'dup_target': 'Több elem kapná ugyanezt a nevet: {0}',
         'too_many': 'Túl sok elem egyszerre (max. {0})', 'encrypted': 'Jelszóval védett, nem nyitható meg: {0}',
-        'job_extract': 'Kibontás',
+        'job_extract': 'Kibontás', 'same_file': 'A forrás és a cél ugyanaz a fájl, kihagyva: {0}',
         'selfupdate_off': 'A felületről indított frissítés itt nem érhető el. A szerveren: sudo gabo-commander update',
         'running': 'Gabo Commander {0} fut:', 'user': 'Felhasználó: {0}',
         'no_password': 'Figyelem: nincs jelszó – csak megbízható belső hálózaton használd! (gabo-commander password)',
@@ -125,7 +125,7 @@ MSG = {
         'zip_errors': 'These could not be added:',
         'bad_name_x': 'Invalid name: {0}', 'dup_target': 'Several items would get the same name: {0}',
         'too_many': 'Too many items at once (max. {0})', 'encrypted': 'Password protected, cannot be opened: {0}',
-        'job_extract': 'Extract',
+        'job_extract': 'Extract', 'same_file': 'Source and target are the same file, skipped: {0}',
         'selfupdate_off': 'Updating from the UI is not available here. On the server: sudo gabo-commander update',
         'running': 'Gabo Commander {0} is running:', 'user': 'User: {0}',
         'no_password': 'Warning: no password – use only on a trusted local network! (gabo-commander password)',
@@ -538,12 +538,24 @@ def same_path(a, b):
     return os.path.normcase(os.path.abspath(a)) == os.path.normcase(os.path.abspath(b))
 
 
+def same_inode(a, b):
+    """Ugyanaz a fájl-e (más útvonalon is: symlinkelt mappa, hardlink, bind mount)."""
+    try:
+        sa, sb = os.lstat(a), os.lstat(b)
+    except OSError:
+        return False
+    return (sa.st_dev, sa.st_ino) == (sb.st_dev, sb.st_ino) and sa.st_ino != 0
+
+
 def copy_file(job, src, dst, size):
+    """Ideiglenes fájlba ír, és csak a végén cseréli le a célt: megszakításkor, betelt lemeznél
+    a korábbi célfájl épen marad."""
     job.cur_total, job.cur_done = size, 0
     start_bytes = job.done_bytes
+    tmp = dst + '.gcpart'
     ok = False
     try:
-        with open(src, 'rb') as fi, open(dst, 'wb') as fo:
+        with open(src, 'rb') as fi, open(tmp, 'wb') as fo:
             done = 0
             use_sendfile = HAS_SENDFILE
             if use_sendfile:
@@ -574,18 +586,19 @@ def copy_file(job, src, dst, size):
                     job.done_bytes += n
                     job.cur_done = done
                     job.tick()
+        try:
+            shutil.copystat(src, tmp)
+        except OSError:
+            pass
+        os.replace(tmp, dst)
         ok = True
     finally:
         if not ok:
             try:
-                os.unlink(dst)
+                os.unlink(tmp)
             except OSError:
                 pass
             job.done_bytes = start_bytes + size
-    try:
-        shutil.copystat(src, dst)
-    except OSError:
-        pass
 
 
 def copy_job(job, sources, dest, move, policy):
@@ -682,6 +695,8 @@ def copy_job(job, sources, dest, move, policy):
                 op[4] = True
                 continue
             if os.path.lexists(d):
+                if same_inode(s, d):            # ugyanaz a fájl más úton: felülírva elveszne (áthelyezésnél törölve is)
+                    raise GCError('same_file', d)
                 if policy == 'skip' or (policy == 'newer' and os.lstat(d).st_mtime >= os.lstat(s).st_mtime):
                     job.done_bytes += size
                     job.done_files += 1
@@ -1602,6 +1617,9 @@ class Handler(http.server.BaseHTTPRequestHandler):
     server_version = 'GaboCommander/' + VERSION
     sys_version = ''
     protocol_version = 'HTTP/1.1'
+    # ennyi ideig várunk egy elakadt kapcsolatra (pl. szüneteltetett videó a gyorsnézetben), aztán lezárjuk –
+    # különben a szál és a nyitott fájl örökre megmaradna (a törölt fájl helye sem szabadulna fel)
+    timeout = 120
 
     def log_message(self, fmt, *args):
         if CONFIG['verbose']:
@@ -1699,7 +1717,7 @@ class Handler(http.server.BaseHTTPRequestHandler):
                     self.close_connection = True
                 return self.fail(self.t('unknown_endpoint'), 404)
             fn(q)
-        except (BrokenPipeError, ConnectionResetError, ConnectionAbortedError):
+        except (BrokenPipeError, ConnectionResetError, ConnectionAbortedError, socket.timeout):
             self.close_connection = True
         except GCError as e:
             self.fail(e.text(self.lang))
@@ -2035,8 +2053,26 @@ class Handler(http.server.BaseHTTPRequestHandler):
         if b.get('crlf'):
             text = text.replace('\r\n', '\n').replace('\n', '\r\n')
         enc = b.get('enc') if b.get('enc') in ('utf-8', 'cp1250') else 'utf-8'
-        with open(path, 'wb') as f:
-            f.write(text.encode(enc, errors='replace'))
+        data = text.encode(enc, errors='replace')
+        real = os.path.realpath(path)          # symlinknél a célfájlt írjuk, a linket meghagyjuk
+        tmp = real + '.gcpart'
+        try:                                   # ideiglenes fájlba, aztán csere: betelt lemeznél sem marad csonka fájl
+            st = os.stat(real)
+            with open(tmp, 'wb') as f:
+                f.write(data)
+            os.chmod(tmp, stat.S_IMODE(st.st_mode))
+            if IS_ROOT:
+                os.chown(tmp, st.st_uid, st.st_gid)
+            if st.st_nlink > 1:                # hardlinknél a csere szétválasztaná: helyben írunk
+                raise OSError(errno.EMLINK, 'hardlink')
+            os.replace(tmp, real)
+        except OSError:
+            try:
+                os.unlink(tmp)
+            except OSError:
+                pass
+            with open(real, 'wb') as f:        # pl. a mappa nem írható, csak a fájl: a régi módon
+                f.write(data)
         self.send_json({'ok': True})
 
     def api_post_mkdir(self, q):
@@ -2060,7 +2096,7 @@ class Handler(http.server.BaseHTTPRequestHandler):
         if not name or name in ('.', '..') or '/' in name or (IS_WIN and '\\' in name):
             raise GCError('bad_name')
         new = os.path.join(os.path.dirname(path), name)
-        if os.path.lexists(new) and not same_path(new, path):
+        if os.path.lexists(new) and not same_path(new, path) and not same_entry(path, new):   # kép.JPG → kép.jpg USB-n, SMB-n is
             raise GCError('exists', name)
         os.rename(path, new)
         self.send_json({'ok': True, 'path': new})

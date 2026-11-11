@@ -176,7 +176,7 @@ class Panel {
       side, el, path: '', parent: null, entries: [], view: [], cursor: 0, anchor: 0, gen: 0,
       free: 0, total: 0, hist: [], hpos: -1, qs: '', qsT: 0,
       sel: new Set(), sizes: new Map(), pending: new Set(),
-      pendingSingle: null, rdrag: false, rsel: true, dropEl: null,
+      pendingSingle: null, rdrag: false, rsel: true, rlast: 0, rY: 0, rTimer: 0, dropEl: null,
       filter: '', ptype: '', tapPrev: -1, lpTimer: 0, lpFired: false, lpX: 0, lpY: 0,
       arc: null,                    /* ha a panel egy archívum belsejét mutatja: az archívum útvonala */
     });
@@ -306,8 +306,11 @@ class Panel {
       if (e.button === 2) {                      // jobb gomb: kijelölés (TC-stílus, húzva is)
         e.preventDefault();
         this.cursor = i;
-        if (!ent.up) { this.rsel = !this.sel.has(ent.n); this.setSel(ent, this.rsel); }
+        this.rsel = ent.up ? true : !this.sel.has(ent.n);
+        if (!ent.up) this.setSel(ent, this.rsel);
         this.rdrag = true;
+        this.rlast = i;
+        this.rY = e.clientY;
         this.render(); this.updateStatus();
         return;
       }
@@ -326,16 +329,14 @@ class Panel {
       this.cursor = i;
       this.render(); this.updateStatus();
     });
-    this.rowsEl.addEventListener('mouseover', e => {
+    /* jobb gombos húzás: a sort az egér helyéből számoljuk (gyors mozgásnál sincs kihagyott sor),
+       a lista szélén automatikusan görget */
+    document.addEventListener('mousemove', e => {
       if (!this.rdrag) return;
-      if (!(e.buttons & 2)) { this.rdrag = false; return; }
-      const row = e.target.closest('.row');
-      if (!row) return;
-      const i = +row.dataset.i, ent = this.view[i];
-      if (!ent) return;
-      if (!ent.up) this.setSel(ent, this.rsel);
-      this.cursor = i;
-      this.render(); this.updateStatus();
+      if (!(e.buttons & 2)) { this.rdragEnd(); return; }
+      this.rY = e.clientY;
+      this.rdragTo();
+      if (!this.rTimer) this.rTimer = setInterval(() => this.rdragScroll(), 40);
     });
     this.rowsEl.addEventListener('click', e => {
       const row = e.target.closest('.row');
@@ -417,6 +418,37 @@ class Panel {
     });
   }
 
+  /* jobb gombos kijelölés az egér magasságában lévő sorig (a közbülsőket is) */
+  rdragTo() {
+    const r = this.list.getBoundingClientRect();
+    const y = Math.max(r.top, Math.min(r.bottom - 1, this.rY));
+    const i = Math.max(0, Math.min(this.view.length - 1, Math.floor((y - r.top + this.list.scrollTop) / ROW_H)));
+    if (i === this.rlast && i === this.cursor) return;
+    const step = i >= this.rlast ? 1 : -1;
+    for (let k = this.rlast; k !== i + step; k += step) {
+      const ent = this.view[k];
+      if (ent && !ent.up) this.setSel(ent, this.rsel);
+    }
+    this.rlast = i;
+    this.cursor = i;
+    this.render(); this.updateStatus();
+  }
+  rdragScroll() {
+    if (!this.rdrag) return;
+    const r = this.list.getBoundingClientRect(), edge = ROW_H * 1.5;
+    let d = 0;
+    if (this.rY < r.top + edge) d = -Math.ceil((r.top + edge - this.rY) / 4);
+    else if (this.rY > r.bottom - edge) d = Math.ceil((this.rY - (r.bottom - edge)) / 4);
+    if (!d) return;
+    this.list.scrollTop += Math.max(-ROW_H * 3, Math.min(ROW_H * 3, d));
+    this.rdragTo();
+  }
+  rdragEnd() {
+    this.rdrag = false;
+    clearInterval(this.rTimer);
+    this.rTimer = 0;
+  }
+
   dropTarget(e) {
     const row = e.target.closest && e.target.closest('.row');
     if (!row) return null;
@@ -490,6 +522,9 @@ class Panel {
     if (this.parent != null) arr.unshift(UP);
     this.view = arr;
     this.gen++;
+    /* a teljes magasság most kell, hogy legyen: különben a görgetés a régi (rövidebb) listához igazodna,
+       és mappából kilépve a lista a tetejére ugrana a kurzor helyett */
+    this.spacer.style.height = arr.length * ROW_H + 'px';
     const names = new Set(arr.map(e => e.n));
     for (const n of this.sel) if (!names.has(n)) this.sel.delete(n);
     const c = focusName != null ? arr.findIndex(e => e.n === focusName) : -1;
@@ -2266,7 +2301,7 @@ document.addEventListener('click', e => {
   const b = e.target.closest('[data-cmd]');
   if (b && CMD[b.dataset.cmd]) run(CMD[b.dataset.cmd]);
 });
-document.addEventListener('mouseup', e => { if (e.button === 2) for (const p of Object.values(panels)) p.rdrag = false; });
+document.addEventListener('mouseup', e => { if (e.button === 2) for (const p of Object.values(panels)) p.rdragEnd(); });
 document.addEventListener('dragover', e => {
   if (e.defaultPrevented) return;
   clearDrop();

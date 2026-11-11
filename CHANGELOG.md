@@ -5,6 +5,19 @@
 
 ## Unreleased
 
+- Fix: going up from a folder no longer jumps to the top of the list; the cursor stays visible on the folder you left.
+  · Javítás: mappából kilépve a lista nem ugrik a tetejére, a kurzor látszik azon a mappán, ahonnan jöttél.
+- Fix: right-button drag selection no longer skips rows when the mouse moves fast, and scrolls the list at its edges.
+  · Javítás: a jobb gombos húzásos kijelölés gyors mozgásnál sem hagy ki sorokat, és a lista szélén görget.
+- Fix: moving or overwriting a file onto itself through another path (symlinked folder, hardlink) could empty and delete it.
+  · Javítás: ha egy fájlt más úton (symlinkelt mappa, hardlink) önmagára helyeztél át vagy írtál felül, kiürülhetett és törlődhetett.
+- Overwriting while copying and saving in the editor go through a temporary file: a full disk or a cancel no longer leaves a broken file.
+  · Másoláskor a felülírás és a szerkesztő mentése ideiglenes fájlon át történik: betelt lemez vagy megszakítás nem hagy csonka fájlt.
+- Fix: renaming that only changes upper/lower case works on USB, SMB and exFAT drives too.
+  · Javítás: a csak kis/nagybetűt változtató átnevezés USB-n, SMB-n és exFAT-on is működik.
+- Stuck connections (e.g. a paused video in quick view) are closed after 2 minutes, so they don't keep deleted files open.
+  · Az elakadt kapcsolatokat (pl. szüneteltetett videó a gyorsnézetben) 2 perc után lezárja, így nem tartanak nyitva törölt fájlokat.
+
 ## 1.5.0 – 2026-11-11
 
 - Update from the UI: *Update now* in the new-version dialog. The app gets no root rights: a systemd unit runs `gabo-commander update`.
