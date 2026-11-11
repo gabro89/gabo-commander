@@ -179,6 +179,9 @@ const I18N = {
     arc_nozip: 'Archívumból egyszerre egy fájl tölthető le. Mappát vagy több elemet F5-tel bonts ki.',
     extract_title: 'Kibontás (F5)', extract_btn: 'Kibont', extract_to: '{0} kibontása ide:',
     qv_arc: '{0} fájl, {1} mappa a gyökérben · kibontva {2}', qv_arc_enter: 'Enter: belenézés',
+    mi_lynx: 'Lynx-navigáció (nyilakkal be / ki)', lynx_on: 'Lynx-navigáció bekapcsolva: → belép a mappába, ← a szülő mappába',
+    lynx_off: 'Lynx-navigáció kikapcsolva',
+    h_lynx: 'Lynx-navigáció (Nézet menü, alapból ki): ← szülő mappa, → belépés a mappába vagy archívumba',
     h_arc_k: 'Enter / Ctrl+PgDn', h_arc: 'Belenézés egy archívumba (zip, tar…), mint egy mappába; Ctrl+PgDn: bármely fájl (pl. .jar, .docx). F5: kibontás',
   },
 
@@ -353,6 +356,9 @@ const I18N = {
     extract_title: 'Extract (F5)', extract_btn: 'Extract', extract_to: 'Extract {0} to:',
     qv_arc: (f, d, s) => `${f} file${f === 1 ? '' : 's'}, ${d} folder${d === 1 ? '' : 's'} at the top · ${s} unpacked`,
     qv_arc_enter: 'Enter: look inside',
+    mi_lynx: 'Lynx-style navigation (arrows in / out)', lynx_on: 'Lynx-style navigation on: → enters the folder, ← goes to the parent',
+    lynx_off: 'Lynx-style navigation off',
+    h_lynx: 'Lynx-style navigation (View menu, off by default): ← parent folder, → into the folder or archive',
     h_arc_k: 'Enter / Ctrl+PgDn', h_arc: 'Look inside an archive (zip, tar…) like a folder; Ctrl+PgDn: any file (e.g. .jar, .docx). F5: extract',
   },
 };

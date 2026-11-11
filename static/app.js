@@ -28,6 +28,7 @@ let DRIVES = [];
 const panels = {};
 let active = null;
 let showHidden = false;
+let lynx = false;                   /* Lynx-navigáció: → belép a mappába, ← a szülőbe (Nézet menü) */
 let clip = null;
 let dragData = null;
 const modalStack = [];
@@ -1560,6 +1561,18 @@ function swapPanels() {
   return Promise.all([panels.L.load(b), panels.R.load(a)]);
 }
 
+function toggleLynx() {
+  lynx = !lynx;
+  store.set('lynx', lynx);
+  toast(t(lynx ? 'lynx_on' : 'lynx_off'));
+}
+
+/* → Lynx-módban: mappába, archívumba vagy a ..-ba lép; sima fájlon nem csinál semmit */
+function lynxEnter(p) {
+  const e = p.view[p.cursor];
+  if (e && (e.d || e.up || (!p.arc && ARCH_RE.test(e.n)))) return p.openCur();
+}
+
 function toggleHidden() {
   showHidden = !showHidden;
   store.set('hidden', showHidden);
@@ -1649,6 +1662,7 @@ function cmdHelp() {
       ${K('Alt+F1 / Alt+F2', t('h_drives'))}
       ${K('F10', t('h_menu'))}
       ${K('Alt+← / Alt+→', t('h_hist'))}
+      ${K('← / →', t('h_lynx'))}
       ${K('Ctrl+R, Ctrl+H, Ctrl+U, Ctrl+=', t('h_misc'))}
       ${K('Ctrl+\\', t('h_root'))}
       ${K('Alt+Shift+Enter', t('h_sizes'))}
@@ -1671,7 +1685,7 @@ function cmdUpload() {
 const CMD = {
   view: cmdView, edit: () => cmdEdit(), newfile: cmdNewFile, copy: () => copyDialog(false), move: () => copyDialog(true),
   mkdir: cmdMkdir, del: cmdDelete, chmod: cmdChmod, rename: cmdRename, multirename: cmdMultiRename,
-  refresh: () => { loadDrives(); return refreshAll(); }, hidden: toggleHidden, swap: swapPanels,
+  refresh: () => { loadDrives(); return refreshAll(); }, hidden: toggleHidden, lynx: toggleLynx, swap: swapPanels,
   same: () => active.other.load(active.path), upload: cmdUpload, download: cmdDownload,
   sizes: () => active.calcAll(), help: cmdHelp, selpat: () => selectPattern(true), unselpat: () => selectPattern(false),
   invert: () => active.invert(), selall: () => active.selectAll(), selnone: () => active.selectNone(),
@@ -1761,7 +1775,8 @@ const MENUS = [
   ]],
   ['m_view', [
     ['mi_hidden', 'hidden', 'Ctrl+H', () => showHidden],
-    ['mi_filter', 'filter', 'Ctrl+F'], ['mi_qview', 'qview', 'Ctrl+Q', () => qv.on], '-',
+    ['mi_filter', 'filter', 'Ctrl+F'], ['mi_qview', 'qview', 'Ctrl+Q', () => qv.on],
+    ['mi_lynx', 'lynx', '← →', () => lynx], '-',
     ['mi_sort_n', 'sort_n', '', () => active && active.sort.key === 'n'],
     ['mi_sort_e', 'sort_e', '', () => active && active.sort.key === 'e'],
     ['mi_sort_s', 'sort_s', '', () => active && active.sort.key === 's'],
@@ -2144,8 +2159,14 @@ document.addEventListener('keydown', e => {
     case 'PageUp': return go(() => (ctrl ? p.goUp() : p.move(-p.pageSize(), sh)));
     case 'Home': return go(() => p.moveTo(0, sh));
     case 'End': return go(() => p.moveTo(p.view.length - 1, sh));
-    case 'ArrowLeft': if (alt) return go(() => p.histGo(-1)); break;
-    case 'ArrowRight': if (alt) return go(() => p.histGo(1)); break;
+    case 'ArrowLeft':
+      if (alt) return go(() => p.histGo(-1));
+      if (lynx && !ctrl && !sh) return go(() => p.goUp());
+      break;
+    case 'ArrowRight':
+      if (alt) return go(() => p.histGo(1));
+      if (lynx && !ctrl && !sh) return go(() => lynxEnter(p));
+      break;
     case 'Enter': return go(() => (alt && sh ? p.calcAll() : p.openCur()));
     case 'Backspace': return go(() => p.goUp());
     case 'Tab': return go(() => setActive(p.other));
@@ -2225,6 +2246,7 @@ async function init() {
   $('#logout').hidden = !INFO.auth;
   buildMenubar();
   showHidden = store.get('hidden', false);
+  lynx = store.get('lynx', false);
   $('[data-cmd=hidden]').classList.toggle('on', showHidden);
   panels.L = new Panel('L', $('#left'));
   panels.R = new Panel('R', $('#right'));

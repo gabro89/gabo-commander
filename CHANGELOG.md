@@ -5,6 +5,9 @@
 
 ## Unreleased
 
+- Lynx-style navigation, can be turned on in the *View* menu: → enters the folder or archive, ← goes to the parent folder.
+  · Lynx-navigáció, a *Nézet* menüben kapcsolható be: → belép a mappába vagy archívumba, ← a szülő mappába lép.
+
 ## 1.3.1 – 2026-11-11
 
 - The new-version notice shows up within an hour of a release (it used to take up to 6 hours), and *Check for updates* always asks GitHub fresh.

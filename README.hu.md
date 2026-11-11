@@ -69,6 +69,8 @@ Kérdések nélküli telepítés: `sudo bash install.sh --yes --lang hu --user g
 
 - **A és B panel**, Tab-bal vagy kattintással lehet váltani köztük. Az aktív panel fejléce kék.
   A menüsor (F10), az ikonos gombsor és az alsó F-gombsor is a Total Commanderhez hasonló.
+- **Lynx-navigáció** (*Nézet* menü, alapból ki): → belép a kurzor alatti mappába vagy archívumba,
+  ← a szülő mappába lép.
 - **Meghajtók** ikonokkal a panel tetején: `/`, saját mappa, USB-lemezek, hálózati meghajtók (NFS/SMB/sshfs),
   mellettük a **szabad hely** csíkkal és százalékkal.
 - Oszlopok: név, kiterjesztés, **méret**, **módosítás**, **létrehozás dátuma**, **jogok** (`rwxr-xr-x`) és tulajdonos.

@@ -69,6 +69,8 @@ For an unattended install: `sudo bash install.sh --yes --lang en --user gabor --
 
 - **Panel A and B**: switch between them with Tab or a click. The active panel has a blue header.
   The menu bar (F10), the icon toolbar and the F-key bar at the bottom work like in Total Commander.
+- **Lynx-style navigation** (*View* menu, off by default): → enters the folder or archive under the cursor,
+  ← goes to the parent folder.
 - **Drives** shown as icons at the top of each panel: `/`, home, USB disks, network shares (NFS/SMB/sshfs),
   with **free space** as a bar and percentage.
 - Columns: name, extension, **size**, **modified**, **created** date, **permissions** (`rwxr-xr-x`) and owner.
