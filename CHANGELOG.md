@@ -5,6 +5,8 @@
 
 ## Unreleased
 
+## 1.5.1 – 2026-11-11
+
 - Fix: going up from a folder no longer jumps to the top of the list; the cursor stays visible on the folder you left.
   · Javítás: mappából kilépve a lista nem ugrik a tetejére, a kurzor látszik azon a mappán, ahonnan jöttél.
 - Fix: right-button drag selection no longer skips rows when the mouse moves fast, and scrolls the list at its edges.
