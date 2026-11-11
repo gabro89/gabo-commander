@@ -5,6 +5,8 @@
 
 ## Unreleased
 
+## 1.5.3 – 2026-11-11
+
 - An unreachable network drive (NFS, SMB) no longer blocks the drive bar or ties up the server: it waits at most 1.5 s and shows the last known size.
   · Egy elérhetetlen hálózati meghajtó (NFS, SMB) nem akasztja meg a meghajtósávot és a szervert: legfeljebb 1,5 mp-et vár, és az utolsó ismert méretet mutatja.
 - Background tabs ask the server less often. · A háttérben lévő lap ritkábban kérdezi a szervert.
