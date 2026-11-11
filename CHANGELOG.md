@@ -5,6 +5,8 @@
 
 ## Unreleased
 
+## 1.3.0 – 2026-11-11
+
 - Multi-rename (Ctrl+M) like in Total Commander: mask, counter, date, search and replace (regex too), case, preview, undo.
   · Csoportos átnevezés (Ctrl+M), mint a TC-ben: minta, számláló, dátum, keresés-csere (regex is), kis/nagybetű, előnézet, visszavonás.
 - Look inside archives (zip, tar.gz, tar.xz, tar.bz2) like folders: Enter / Ctrl+PgDn, F3, quick view, F5 extracts the selection.
