@@ -283,6 +283,16 @@ pre.cmd { background: #1e1e1e; color: #e6e6e6; padding: 6px 10px; border-radius:
 }
 .qv-frame { flex: 1; width: 100%; border: 0; background: #fff; }
 .qv-msg { padding: 16px; color: var(--muted); }
+.qv-arc { flex: 1; min-height: 0; overflow: auto; padding: 4px 8px; font-size: 12px; }
+.qv-arc table { width: 100%; border-collapse: collapse; table-layout: fixed; }
+.qv-arc td { padding: 1px 6px 1px 0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.qv-arc td .ic { display: inline-block; vertical-align: -3px; margin-right: 5px; }
+.qv-arc td + td { width: 80px; text-align: right; color: var(--muted); font-variant-numeric: tabular-nums; }
+.qv-arc td + td + td { width: 130px; }
+.qv-sum { color: var(--muted); padding: 3px 0 5px; }
+
+/* archívum belseje: zip ikon az útvonal előtt */
+.panel.in-arc .pathbar { padding-left: 24px; background-image: url("data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16'><rect x='2.5' y='1.5' width='11' height='13' fill='%23f3d27a' stroke='%23a3842a'/><path d='M8 1.5v7' stroke='%23704f00' stroke-dasharray='1 1'/><rect x='6.8' y='8.5' width='2.4' height='3' fill='%23704f00'/></svg>"); background-repeat: no-repeat; background-position: 4px center; background-size: 16px 16px; }
 
 /* ---------- ikonok */
 .ic { flex: 0 0 16px; width: 16px; height: 16px; background: no-repeat center / 16px 16px; position: relative; }
@@ -385,6 +395,46 @@ pre.cmd { background: #1e1e1e; color: #e6e6e6; padding: 6px 10px; border-radius:
   font: 13px/1.4 Consolas, "DejaVu Sans Mono", monospace; tab-size: 4; white-space: pre; overflow: auto;
 }
 .ed-info { color: var(--muted); font-size: 12px; padding-top: 4px; }
+
+/* csoportos átnevezés */
+.dlg.mr { width: min(980px, 100%); height: 100%; }
+.dlg.mr .dlg-body { flex: 1; display: flex; flex-direction: column; min-height: 0; padding-bottom: 4px; }
+.mr-rules { border: none; margin: 0; padding: 0; min-width: 0; }
+.mr-rules[disabled] { opacity: .5; }
+.mr-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 0 12px; }
+.mr-grid > label, .mr-grid > div { margin-bottom: 8px; }
+.dlg-body .mr-grid input[name=mask], .dlg-body .mr-grid input[name=ext],
+.dlg-body .mr-grid input[name=search], .dlg-body .mr-grid input[name=replace] { font-family: Consolas, "DejaVu Sans Mono", monospace; }
+.mr-ins { display: flex; flex-wrap: wrap; align-items: center; gap: 3px; margin: -2px 0 10px; font-size: 12px; }
+.mr-ins span { color: var(--muted); margin-right: 3px; }
+.mr-ins button { padding: 0 5px; font: 12px Consolas, "DejaVu Sans Mono", monospace; line-height: 18px; }
+.mr-opts { display: flex; flex-wrap: wrap; gap: 4px 18px; margin: -2px 0 8px; }
+.mr-opts label.chk { margin: 0; }
+.mr-counter { display: flex; align-items: flex-end; gap: 6px; }
+.mr-counter > span { white-space: nowrap; padding-bottom: 5px; }
+.dlg-body .mr-counter label { flex: 1; margin: 0; font-size: 12px; min-width: 0; }
+.mr-manual { background: var(--qs); border: 1px solid var(--qs-line); padding: 4px 8px; margin-bottom: 8px; display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
+.mr-manual[hidden] { display: none; }
+.mr-help { margin-bottom: 8px; font-size: 12px; }
+.mr-help summary { cursor: default; color: var(--brand); }
+.mr-help > div { padding: 6px 0 2px; line-height: 1.7; }
+.mr-help b { font-family: Consolas, "DejaVu Sans Mono", monospace; color: var(--keys-key); }
+.mr-prev { flex: 1; min-height: 120px; overflow: auto; border: 1px solid var(--line); background: var(--list); }
+.mr-prev table { width: 100%; border-collapse: collapse; table-layout: fixed; }
+.mr-prev th { position: sticky; top: 0; text-align: left; font-weight: 600; padding: 2px 6px; background: linear-gradient(var(--cols-a), var(--cols-b)); border-bottom: 1px solid var(--cols-line); }
+.mr-prev td { padding: 1px 6px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.mr-prev td:first-child { display: flex; align-items: center; gap: 4px; }
+.mr-prev td:first-child span { overflow: hidden; text-overflow: ellipsis; }
+.mr-prev tr.same td { color: var(--muted); }
+.mr-prev tr.bad td:last-child { color: var(--err); }
+.mr-prev td em { font-style: normal; font-size: 11px; margin-left: 8px; padding: 0 4px; border: 1px solid currentColor; border-radius: 2px; }
+.mr-stat { padding: 5px 0 0; font-size: 12px; color: var(--muted); }
+.mr-stat .err { color: var(--err); }
+.dlg-btns button:disabled { opacity: .5; }
+@media (max-width: 820px) {
+  .mr-grid { grid-template-columns: 1fr; }
+  .mr-help { display: none; }
+}
 
 table.perm { border-collapse: collapse; margin-bottom: 10px; }
 table.perm th, table.perm td { padding: 3px 10px; text-align: center; }

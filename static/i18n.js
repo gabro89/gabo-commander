@@ -145,6 +145,41 @@ const I18N = {
     qv_dir: 'Mappa – Space: a méretének kiszámítása', qv_dir_size: 'Mappa, mérete: {0}',
     h_pack: 'Tömörítés / kicsomagolás (zip, tar.gz, tar.xz)', h_filter: 'Szűrő: csak a szövegrészt tartalmazó vagy mintára illő elemek (Esc: ki)',
     h_fav: 'Kedvenc mappák', h_qview: 'Gyorsnézet: kép, videó, hang, szöveg, PDF a másik panelen',
+
+    /* csoportos átnevezés */
+    mi_multirename: 'Csoportos átnevezés…', tb_multirename: 'Csoportos átnevezés (Ctrl+M)',
+    h_multirename: 'Csoportos átnevezés: minta, számláló, dátum, keresés-csere (regex is), kis/nagybetű',
+    mr_title: 'Csoportos átnevezés (Ctrl+M) – {0} elem',
+    mr_mask: 'Névminta:', mr_ext: 'Kiterjesztés:', mr_ins: 'Beszúrás:',
+    mr_search: 'Keresés:', mr_replace: 'Csere erre:',
+    mr_regex: 'Reguláris kifejezés ($1 a cserében)', mr_cs: 'Kis/nagybetű számít', mr_first: 'Csak az első találat',
+    mr_case: 'Kis- és nagybetűk:', mr_case_keep: 'változatlan', mr_case_lower: 'mind kisbetű', mr_case_upper: 'MIND NAGYBETŰ',
+    mr_case_first: 'Első betű nagy', mr_case_words: 'Minden Szó Nagybetűvel',
+    mr_counter: 'Számláló [C]:', mr_start: 'Kezdet', mr_step: 'Lépés', mr_digits: 'Jegyek',
+    mr_old: 'Régi név', mr_new: 'Új név',
+    mr_btn: 'Átnevez', mr_reset: 'Alaphelyzet', mr_edit: 'Nevek szerkesztése…', mr_undo: 'Visszavonás ({0})',
+    mr_stat: '{0} elem · {1} változik', mr_stat_err: '{0} hiba – javítsd, különben nem indul',
+    mr_err_dup: 'ismétlődő név', mr_err_exists: 'már létezik', mr_err_bad: 'érvénytelen név', mr_err_long: 'túl hosszú',
+    mr_bad_re: 'Hibás reguláris kifejezés: {0}',
+    mr_manual: 'Kézzel szerkesztett lista – a szabályok most nem számítanak.', mr_manual_off: 'Vissza a szabályokhoz',
+    mr_edit_title: 'Új nevek – soronként egy', mr_edit_hint: '{0} sor kell, ugyanabban a sorrendben, mint a listában.',
+    mr_edit_count: 'A sorok száma ({0}) nem egyezik az elemek számával ({1}).',
+    mr_done: '{0} elem átnevezve', mr_undone: 'Visszavonva: {0} elem',
+    mr_help_t: 'Helyettesítők',
+    mr_help: '<b>[N]</b> név (kiterjesztés nélkül) · <b>[N2-5]</b> a 2–5. karakter · <b>[N2,3]</b> 3 karakter a 2.-tól · <b>[N3-]</b> a 3.-tól a végéig · <b>[N-3-]</b> az utolsó 3 karakter'
+      + '<br><b>[E]</b> kiterjesztés (ugyanígy: [E1-2]) · <b>[P]</b> szülőmappa neve · <b>[G]</b> a nagyszülőé'
+      + '<br><b>[C]</b> számláló a lenti beállítással · <b>[C10+5:3]</b> 10-től, ötösével, 3 jegyen'
+      + '<br><b>[d]</b> módosítás dátuma (ÉÉÉÉ-HH-NN) · <b>[t]</b> ideje (óó.pp.mm) · <b>[Y] [y] [M] [D] [h] [m] [s]</b> év, hónap, nap, óra, perc, mp'
+      + '<br><b>[U]</b> NAGYBETŰ, <b>[L]</b> kisbetű, <b>[F]</b> Szavak Elején Nagy, <b>[n]</b> változatlan – innentől a minta végéig'
+      + '<br><b>[[]</b> és <b>[]]</b>: szögletes zárójel · sima keresésnél több szó is lehet | jellel: <i>a|b</i> → <i>x|y</i>',
+
+    /* archívum böngészése */
+    arc_readonly: 'Az archívum csak olvasható – F5-tel (vagy húzással) bonthatod ki a kijelölteket.',
+    arc_status: 'archívum, csak olvasható – F5: kibontás',
+    arc_nozip: 'Archívumból egyszerre egy fájl tölthető le. Mappát vagy több elemet F5-tel bonts ki.',
+    extract_title: 'Kibontás (F5)', extract_btn: 'Kibont', extract_to: '{0} kibontása ide:',
+    qv_arc: '{0} fájl, {1} mappa a gyökérben · kibontva {2}', qv_arc_enter: 'Enter: belenézés',
+    h_arc_k: 'Enter / Ctrl+PgDn', h_arc: 'Belenézés egy archívumba (zip, tar…), mint egy mappába; Ctrl+PgDn: bármely fájl (pl. .jar, .docx). F5: kibontás',
   },
 
   en: {
@@ -284,6 +319,41 @@ const I18N = {
     qv_dir: 'Folder – Space: calculate its size', qv_dir_size: 'Folder, size: {0}',
     h_pack: 'Pack / unpack (zip, tar.gz, tar.xz)', h_filter: 'Filter: show only items containing the text or matching a pattern (Esc: off)',
     h_fav: 'Favorite folders', h_qview: 'Quick view: image, video, audio, text, PDF in the other panel',
+
+    mi_multirename: 'Multi-rename…', tb_multirename: 'Multi-rename (Ctrl+M)',
+    h_multirename: 'Multi-rename: mask, counter, date, search and replace (regex too), upper/lower case',
+    mr_title: n => `Multi-rename (Ctrl+M) – ${n} item${n === 1 ? '' : 's'}`,
+    mr_mask: 'Name mask:', mr_ext: 'Extension:', mr_ins: 'Insert:',
+    mr_search: 'Search for:', mr_replace: 'Replace with:',
+    mr_regex: 'Regular expression ($1 in the replacement)', mr_cs: 'Match case', mr_first: 'First match only',
+    mr_case: 'Upper / lower case:', mr_case_keep: 'unchanged', mr_case_lower: 'all lowercase', mr_case_upper: 'ALL UPPERCASE',
+    mr_case_first: 'First letter uppercase', mr_case_words: 'Each Word Capitalized',
+    mr_counter: 'Counter [C]:', mr_start: 'Start', mr_step: 'Step', mr_digits: 'Digits',
+    mr_old: 'Old name', mr_new: 'New name',
+    mr_btn: 'Rename', mr_reset: 'Reset', mr_edit: 'Edit names…', mr_undo: 'Undo ({0})',
+    mr_stat: (n, c) => `${n} item${n === 1 ? '' : 's'} · ${c} will change`,
+    mr_stat_err: n => `${n} problem${n === 1 ? '' : 's'} – fix ${n === 1 ? 'it' : 'them'} to start`,
+    mr_err_dup: 'duplicate name', mr_err_exists: 'already exists', mr_err_bad: 'invalid name', mr_err_long: 'too long',
+    mr_bad_re: 'Invalid regular expression: {0}',
+    mr_manual: 'Manually edited list – the rules are not used now.', mr_manual_off: 'Back to the rules',
+    mr_edit_title: 'New names – one per line', mr_edit_hint: '{0} lines are needed, in the same order as in the list.',
+    mr_edit_count: 'The number of lines ({0}) does not match the number of items ({1}).',
+    mr_done: n => `${n} item${n === 1 ? '' : 's'} renamed`, mr_undone: n => `Undone: ${n} item${n === 1 ? '' : 's'}`,
+    mr_help_t: 'Placeholders',
+    mr_help: '<b>[N]</b> name (without extension) · <b>[N2-5]</b> characters 2–5 · <b>[N2,3]</b> 3 characters from the 2nd · <b>[N3-]</b> from the 3rd to the end · <b>[N-3-]</b> the last 3 characters'
+      + '<br><b>[E]</b> extension (also [E1-2]) · <b>[P]</b> parent folder name · <b>[G]</b> grandparent folder name'
+      + '<br><b>[C]</b> counter with the settings below · <b>[C10+5:3]</b> from 10, step 5, 3 digits'
+      + '<br><b>[d]</b> modification date (YYYY-MM-DD) · <b>[t]</b> time (hh.mm.ss) · <b>[Y] [y] [M] [D] [h] [m] [s]</b> year, month, day, hour, minute, second'
+      + '<br><b>[U]</b> UPPERCASE, <b>[L]</b> lowercase, <b>[F]</b> Each Word Capitalized, <b>[n]</b> unchanged – from there to the end of the mask'
+      + '<br><b>[[]</b> and <b>[]]</b>: square brackets · plain search takes several words separated by |: <i>a|b</i> → <i>x|y</i>',
+
+    arc_readonly: 'Archives are read-only – press F5 (or drag) to extract the selection.',
+    arc_status: 'archive, read-only – F5: extract',
+    arc_nozip: 'From an archive you can download one file at a time. Extract folders or several items with F5.',
+    extract_title: 'Extract (F5)', extract_btn: 'Extract', extract_to: 'Extract {0} to:',
+    qv_arc: (f, d, s) => `${f} file${f === 1 ? '' : 's'}, ${d} folder${d === 1 ? '' : 's'} at the top · ${s} unpacked`,
+    qv_arc_enter: 'Enter: look inside',
+    h_arc_k: 'Enter / Ctrl+PgDn', h_arc: 'Look inside an archive (zip, tar…) like a folder; Ctrl+PgDn: any file (e.g. .jar, .docx). F5: extract',
   },
 };
 

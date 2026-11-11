@@ -84,6 +84,12 @@ Kérdések nélküli telepítés: `sudo bash install.sh --yes --lang hu --user g
 - **Mappák letöltése**: egy mappa vagy több kijelölt elem egyetlen zipként töltődik le (Shift+F3), menet közben készül.
 - **Tömörítés és kicsomagolás** (Alt+F5 / Alt+F9): zip, tar.gz, tar.xz, tar.bz2, háttérben, folyamatjelzővel.
   Kicsomagoláskor a célmappából kivezető útvonalakat kihagyja.
+- **Belenézés az archívumokba**: Enterrel egy zip vagy tar(.gz/.xz/.bz2) mappaként nyílik meg, Ctrl+PgDn-nel
+  bármely zip/tar alapú fájl is (pl. .jar, .docx). Benne F3 / gyorsnézet működik, F5-tel, húzással vagy
+  Ctrl+C / Ctrl+V-vel a kijelöltek kibonthatók. Az archívum csak olvasható. A gyorsnézet egy archívum tartalmát is mutatja.
+- **Csoportos átnevezés** (Ctrl+M), mint a Total Commanderben: névminta (`[N]`, `[N2-5]`, `[E]`, `[C]` számláló,
+  `[d]` dátum, `[P]` szülőmappa, `[U]`/`[L]`/`[F]` kis- és nagybetű…), keresés és csere (reguláris kifejezéssel is),
+  kis/nagybetű-átalakítás, élő előnézet ütközésjelzéssel, kézi szerkesztés és visszavonás.
 - **Szűrő** (Ctrl+F): csak a beírt szövegrészt tartalmazó vagy mintára illő elemek látszanak (`*.jpg; *.png`).
 - **Kedvenc mappák** (Ctrl+D vagy a ★ gomb): a szerveren tárolódnak, így minden eszközödön ugyanazok.
 - **Gyorsnézet** (Ctrl+Q): a másik panelen előnézet a kurzor alatti fájlról: kép, videó, hang, szöveg, PDF.

@@ -95,6 +95,9 @@ MSG = {
         'not_archive': 'Nem támogatott archívum: {0}', 'unsafe_path': 'Veszélyes útvonal kihagyva: {0}',
         'bad_format': 'Ismeretlen formátum: {0}', 'job_pack': 'Tömörítés', 'job_unpack': 'Kicsomagolás',
         'zip_errors': 'Ezeket nem sikerült beletenni:',
+        'bad_name_x': 'Érvénytelen név: {0}', 'dup_target': 'Több elem kapná ugyanezt a nevet: {0}',
+        'too_many': 'Túl sok elem egyszerre (max. {0})', 'encrypted': 'Jelszóval védett, nem nyitható meg: {0}',
+        'job_extract': 'Kibontás',
         'running': 'Gabo Commander {0} fut:', 'user': 'Felhasználó: {0}',
         'no_password': 'Figyelem: nincs jelszó – csak megbízható belső hálózaton használd! (gabo-commander password)',
     },
@@ -119,6 +122,9 @@ MSG = {
         'not_archive': 'Unsupported archive: {0}', 'unsafe_path': 'Unsafe path skipped: {0}',
         'bad_format': 'Unknown format: {0}', 'job_pack': 'Pack', 'job_unpack': 'Unpack',
         'zip_errors': 'These could not be added:',
+        'bad_name_x': 'Invalid name: {0}', 'dup_target': 'Several items would get the same name: {0}',
+        'too_many': 'Too many items at once (max. {0})', 'encrypted': 'Password protected, cannot be opened: {0}',
+        'job_extract': 'Extract',
         'running': 'Gabo Commander {0} is running:', 'user': 'User: {0}',
         'no_password': 'Warning: no password – use only on a trusted local network! (gabo-commander password)',
     },
@@ -1082,15 +1088,33 @@ class _ProgressFile:
         pass
 
 
-def safe_member(root, name):
-    """Az archívumbeli név célútvonala, vagy None, ha kilépne a célmappából (abszolút, '..', meghajtóbetű)."""
-    name = name.replace('\\', '/')
-    if name.startswith('/') or re.match(r'^[A-Za-z]:', name):
-        return None
+def clean_parts(name):
+    """Az archívumbeli név részei; a kezdő '/' és a meghajtóbetű elhagyva (mint a GNU tarnál).
+    None, ha '..' van benne vagy üres – ezek kiléphetnének a célmappából."""
+    name = re.sub(r'^[A-Za-z]:', '', name.replace('\\', '/'))
     parts = [x for x in name.split('/') if x not in ('', '.')]
     if not parts or '..' in parts:
         return None
-    return os.path.join(root, *parts)
+    return parts
+
+
+def safe_member(root, name, pick=None):
+    """Az archívumbeli név célútvonala, vagy None, ha veszélyes / nincs a kiválasztottak között.
+    A pick(részek) a kiválasztott elemeknél a célmappához viszonyított részeket adja (különben None)."""
+    parts = clean_parts(name)
+    if parts is not None and pick is not None:
+        parts = pick(parts)
+    return os.path.join(root, *parts) if parts else None
+
+
+def zip_name(info):
+    """Zip-beli név: UTF-8 jelző nélkül a cp437-ként olvasott név gyakran valójában UTF-8."""
+    if info.flag_bits & 0x800:
+        return info.filename
+    try:
+        return info.filename.encode('cp437').decode('utf-8')
+    except (UnicodeEncodeError, UnicodeDecodeError):
+        return info.filename
 
 
 def _inside(path, root):
@@ -1124,18 +1148,22 @@ def _copy_stream(job, fi, target):
             fo.write(b)
 
 
-def unpack_zip(job, arc, root, policy):
+def unpack_zip(job, arc, root, policy, pick=None):
     with zipfile.ZipFile(arc) as zf:
-        infos = zf.infolist()
-        base = job.done_bytes
-        job.total_bytes += sum(i.file_size for i in infos)
-        job.total_files += sum(1 for i in infos if not i.is_dir())
-        for info in infos:
-            job.check()
-            target = safe_member(root, info.filename)
-            if target is None:
-                job.error(job.t('unsafe_path', info.filename))
+        todo = []
+        for info in zf.infolist():
+            name = zip_name(info)
+            if clean_parts(name) is None:
+                job.error(job.t('unsafe_path', name))
                 continue
+            target = safe_member(root, name, pick)
+            if target is not None:
+                todo.append((info, target))
+        base = job.done_bytes
+        job.total_bytes += sum(i.file_size for i, _ in todo)
+        job.total_files += sum(1 for i, _ in todo if not i.is_dir())
+        for info, target in todo:
+            job.check()
             job.current = target
             try:
                 if info.is_dir():
@@ -1154,12 +1182,14 @@ def unpack_zip(job, arc, root, policy):
                 job.done_files += 1
             except (OSError, GCError) as e:
                 job.fail(e)
+            except RuntimeError:                  # jelszóval védett tag
+                job.error(job.t('encrypted', info.filename))
             base += info.file_size
             job.done_bytes = base
             job.tick()
 
 
-def unpack_tar(job, arc, root, policy):
+def unpack_tar(job, arc, root, policy, pick=None):
     size = os.path.getsize(arc)
     base = job.done_bytes
     job.total_bytes += size
@@ -1168,9 +1198,11 @@ def unpack_tar(job, arc, root, policy):
         with tarfile.open(fileobj=_ProgressFile(raw, job, base), mode='r:*') as tf:
             for m in tf:
                 job.check()
-                target = safe_member(root, m.name)
-                if target is None:
+                if clean_parts(m.name) is None:
                     job.error(job.t('unsafe_path', m.name))
+                    continue
+                target = safe_member(root, m.name, pick)
+                if target is None:
                     continue
                 job.current = target
                 try:
@@ -1195,14 +1227,14 @@ def unpack_tar(job, arc, root, policy):
                         elif _prepare_target(job, target, policy, False):
                             os.symlink(m.linkname, target)
                     elif m.islnk():
-                        src = safe_member(root, m.linkname)
-                        if src is None:
+                        if clean_parts(m.linkname) is None:
                             job.error(job.t('unsafe_path', '%s -> %s' % (m.name, m.linkname)))
                         elif _prepare_target(job, target, policy, False):
+                            src = safe_member(root, m.linkname, pick)
                             try:
                                 os.link(src, target)
-                            except OSError:
-                                shutil.copy2(src, target)
+                            except (OSError, TypeError):   # a cél nincs kibontva: a tartalmát írjuk ki
+                                _copy_stream(job, tf.extractfile(m), target)
                     # eszközfájlokat, FIFO-kat nem hozunk létre
                 except (OSError, GCError) as e:
                     job.fail(e)
@@ -1234,6 +1266,324 @@ def unpack_job(job, archives, dest, subdir, policy):
         job.check()
         os.makedirs(root, exist_ok=True)
         (unpack_zip if kind == 'zip' else unpack_tar)(job, a, root, policy)
+
+
+# ------------------------------------------------------------------ archívum böngészése / browsing archives
+# Az archívumon belüli útvonal „virtuális”: /home/x/a.zip/mappa/fajl.txt. A panel ugyanúgy kezeli,
+# mint egy mappát; a tartalomjegyzéket a memóriában tartjuk, amíg az archívum nem változik.
+
+def arc_kind(path):
+    try:
+        if zipfile.is_zipfile(path):
+            return 'zip'
+        if tarfile.is_tarfile(path):
+            return 'tar'
+    except (OSError, EOFError, tarfile.TarError):
+        pass
+    return None
+
+
+def split_arc(path):
+    """(archívum, belső '/'-útvonal, fajta), ha az útvonal egy archívumba mutat, különben None."""
+    p, rest = path, []
+    while not os.path.exists(p):
+        head, tail = os.path.split(p)
+        if head == p or not tail:
+            return None
+        rest.append(tail)
+        p = head
+    if not os.path.isfile(p):
+        return None
+    kind = arc_kind(p)
+    return (p, '/'.join(reversed(rest)), kind) if kind else None
+
+
+def _zip_time(info):
+    try:
+        return time.mktime(info.date_time + (0, 0, -1))
+    except (OverflowError, ValueError):
+        return 0
+
+
+class ArcIndex:
+    """Egy archívum tartalomjegyzéke mappánként: dirs[belső mappa][név] = [mappa?, méret, idő, jogok, link?, cél, tulaj, csoport]."""
+
+    def __init__(self, path, kind):
+        self.path, self.kind = path, kind
+        self.dirs = {'': {}}
+        self.files = {}                       # belső fájlútvonal -> eredeti tagnév
+        self.dsize = collections.Counter()    # belső mappa -> a benne lévő fájlok összmérete
+        if kind == 'zip':
+            with zipfile.ZipFile(path) as zf:
+                for info in zf.infolist():
+                    mode = info.external_attr >> 16
+                    is_dir = info.is_dir()
+                    if not stat.S_IFMT(mode):
+                        mode |= (stat.S_IFDIR | 0o755) if is_dir else (stat.S_IFREG | 0o644)
+                    self._add(zip_name(info), info.filename, is_dir, info.file_size, _zip_time(info),
+                              stat.filemode(mode), stat.S_ISLNK(mode), '', '', '')
+        else:
+            with tarfile.open(path, 'r:*') as tf:
+                for m in tf:
+                    ftype = stat.S_IFDIR if m.isdir() else stat.S_IFLNK if m.issym() else stat.S_IFREG
+                    self._add(m.name, m.name, m.isdir(), m.size if m.isreg() else 0, m.mtime,
+                              stat.filemode(ftype | (m.mode & 0o7777)), m.issym(),
+                              m.linkname if (m.issym() or m.islnk()) else '', m.uname, m.gname)
+
+    def _bump(self, d, delta):
+        while True:
+            self.dsize[d] += delta
+            if not d:
+                return
+            d = d.rpartition('/')[0]
+
+    def _add(self, name, orig, is_dir, size, mtime, perm, is_link, link, owner, group):
+        parts = clean_parts(name)
+        if parts is None:
+            return
+        d = ''
+        for comp in parts[:-1]:               # a hiányzó szülőmappák (a zipben gyakran nincsenek külön)
+            sub = d + '/' + comp if d else comp
+            if sub not in self.dirs:
+                self.dirs[sub] = {}
+                self.dirs[d][comp] = [True, 0, mtime, 'drwxr-xr-x', False, '', '', '']
+                self.files.pop(sub, None)
+            d = sub
+        leaf = parts[-1]
+        full = d + '/' + leaf if d else leaf
+        kids = self.dirs[d]
+        if is_dir:
+            self.dirs.setdefault(full, {})
+            kids[leaf] = [True, 0, mtime, perm, False, '', owner, group]
+            return
+        if full in self.dirs:
+            return
+        old = kids.get(leaf)
+        if old and not old[0]:                # ugyanaz a név többször (tar): az utolsó számít
+            self._bump(d, -old[1])
+        kids[leaf] = [False, size, mtime, perm, is_link, link, owner, group]
+        self.files[full] = orig
+        self._bump(d, size)
+
+    def entries(self, inner):
+        kids = self.dirs.get(inner)
+        if kids is None:
+            raise GCError('not_dir' if inner in self.files else 'not_found', arc_vpath(self.path, inner))
+        out = []
+        for n, (d, s, m, p, lnk, tgt, o, g) in kids.items():
+            e = {'n': n, 'l': lnk, 'd': d, 's': s, 'm': m, 'b': None, 'p': p, 'o': o, 'g': g}
+            if tgt:
+                e['t'] = tgt
+            if d:
+                e['ds'] = self.dsize.get(inner + '/' + n if inner else n, 0)
+            out.append(e)
+        return out
+
+
+ARC_CACHE = collections.OrderedDict()
+ARC_LOCK = threading.Lock()
+
+
+def arc_index(path, kind):
+    st = os.stat(path)
+    key = (path, st.st_mtime_ns, st.st_size)
+    with ARC_LOCK:
+        idx = ARC_CACHE.get(key)
+        if idx is not None:
+            ARC_CACHE.move_to_end(key)
+            return idx
+    try:
+        idx = ArcIndex(path, kind)
+    except (zipfile.BadZipFile, tarfile.TarError, EOFError, ValueError) as e:
+        raise GCError('not_archive', '%s (%s)' % (path, e))
+    with ARC_LOCK:
+        for k in [k for k in ARC_CACHE if k[0] == path]:
+            del ARC_CACHE[k]
+        ARC_CACHE[key] = idx
+        while len(ARC_CACHE) > 4:
+            ARC_CACHE.popitem(last=False)
+    return idx
+
+
+def arc_vpath(arc, inner):
+    return arc + os.sep + inner.replace('/', os.sep) if inner else arc
+
+
+def list_arc(arc, inner, kind):
+    idx = arc_index(arc, kind)
+    inner = '/'.join(clean_parts(inner) or [])
+    entries = idx.entries(inner)
+    parent = arc_vpath(arc, inner.rpartition('/')[0]) if inner else os.path.dirname(arc)
+    total, free = usage(os.path.dirname(arc))
+    return {'path': arc_vpath(arc, inner), 'parent': parent, 'entries': entries,
+            'total': total, 'free': free, 'archive': arc, 'inner': inner}
+
+
+class _Member:
+    """Archívumbeli fájl olvasásra; a close() az archívumot is lezárja."""
+
+    def __init__(self, f, owner, size):
+        self.f, self.owner, self.size = f, owner, size
+
+    def read(self, n=-1):
+        return self.f.read(n)
+
+    def close(self):
+        try:
+            self.f.close()
+        finally:
+            self.owner.close()
+
+
+def arc_open(arc, inner, kind):
+    """Egy archívumbeli fájl megnyitása. A size None, ha előre nem tudható (tar hardlink)."""
+    idx = arc_index(arc, kind)
+    inner = '/'.join(clean_parts(inner) or [])
+    if inner in idx.dirs:
+        raise GCError('is_dir')
+    orig = idx.files.get(inner)
+    if orig is None:
+        raise GCError('not_found', arc_vpath(arc, inner))
+    if kind == 'zip':
+        zf = zipfile.ZipFile(arc)
+        try:
+            info = zf.getinfo(orig)
+            return _Member(zf.open(info), zf, info.file_size)
+        except RuntimeError:
+            zf.close()
+            raise GCError('encrypted', inner)
+        except BaseException:
+            zf.close()
+            raise
+    tf = tarfile.open(arc, 'r:*')
+    try:
+        for m in tf:
+            if m.name == orig and (m.isreg() or m.islnk() or m.issym()):
+                f = tf.extractfile(m)
+                if f is not None:
+                    return _Member(f, tf, m.size if m.isreg() else None)
+        raise GCError('not_found', arc_vpath(arc, inner))
+    except BaseException:
+        tf.close()
+        raise
+
+
+def read_start(path, limit):
+    """Egy fájl első limit bájtja és a teljes mérete – archívumon belül is."""
+    if not os.path.lexists(path):
+        s = split_arc(path)
+        if s:
+            f = arc_open(*s)
+            try:
+                data = f.read(limit)
+            finally:
+                f.close()
+            return data, f.size if f.size is not None else len(data)
+    if os.path.isdir(path):
+        raise GCError('is_dir')
+    with open(path, 'rb') as f:
+        return f.read(limit), os.fstat(f.fileno()).st_size
+
+
+def extract_job(job, arc, inner, kind, names, dest, policy):
+    """Kiválasztott elemek kibontása egy archívum belső mappájából (a mappák tartalmával együtt)."""
+    if not os.path.isdir(dest):
+        raise GCError('target_missing', dest)
+    pre = clean_parts(inner) or []
+    sel, k = set(names), len(pre)
+
+    def pick(parts):
+        return parts[k:] if len(parts) > k and parts[:k] == pre and parts[k] in sel else None
+
+    job.set_running()
+    (unpack_zip if kind == 'zip' else unpack_tar)(job, arc, dest, policy, pick)
+
+
+# ------------------------------------------------------------------ csoportos átnevezés / multi-rename
+
+MAX_RENAME = 50000
+
+
+def valid_name(name):
+    return (isinstance(name, str) and name not in ('', '.', '..') and '/' not in name and '\0' not in name
+            and not (IS_WIN and ('\\' in name or ':' in name)) and len(os.fsencode(name)) <= 255)
+
+
+def same_entry(a, b):
+    """Ugyanaz a bejegyzés-e (kis/nagybetűre nem érzékeny fájlrendszeren a csak betűméretben eltérő név)."""
+    try:
+        sa, sb = os.lstat(a), os.lstat(b)
+    except OSError:
+        return False
+    return (sa.st_dev, sa.st_ino) == (sb.st_dev, sb.st_ino) and os.path.basename(a).lower() == os.path.basename(b).lower()
+
+
+def multi_rename(base, pairs, lang=None):
+    """Egy mappán belüli átnevezések; láncok (a→b, b→c) és körök (a→b, b→a) is működnek.
+    Előbb mindent ellenőriz, és ha bármi gond van, semmit nem nevez át."""
+    if not os.path.isdir(base):
+        raise GCError('not_dir', base)
+    if len(pairs) > MAX_RENAME:
+        raise GCError('too_many', MAX_RENAME)
+    todo = collections.OrderedDict()
+    for p in pairs:
+        if not isinstance(p, (list, tuple)) or len(p) != 2:
+            raise GCError('bad_json')
+        src, dst = p
+        for n in (src, dst):
+            if not valid_name(n):
+                raise GCError('bad_name_x', str(n))
+        if src in todo:
+            raise GCError('dup_target', src)
+        if src != dst:
+            todo[src] = dst
+    seen = set()
+    for src, dst in todo.items():
+        if not os.path.lexists(os.path.join(base, src)):
+            raise GCError('not_found', src)
+        key = dst.lower() if IS_WIN else dst
+        if key in seen:
+            raise GCError('dup_target', dst)
+        seen.add(key)
+        full = os.path.join(base, dst)
+        if dst not in todo and os.path.lexists(full) and not same_entry(os.path.join(base, src), full):
+            raise GCError('exists', dst)
+
+    done, errors, orig = [], [], {}
+    pending = todo
+    while pending:
+        progress = False
+        for src, dst in list(pending.items()):
+            if dst in pending:                       # a cél még foglalt: egy másik elem vár átnevezésre
+                continue
+            del pending[src]
+            progress = True
+            a, b = os.path.join(base, src), os.path.join(base, dst)
+            first = orig.pop(src, src)
+            try:
+                if os.path.lexists(b) and not same_entry(a, b):   # az os.rename felülírná!
+                    raise GCError('exists', dst)
+                os.rename(a, b)
+                done.append([first, dst])
+            except (OSError, GCError) as e:
+                errors.append('%s → %s: %s' % (first, dst, errtext(e, lang)))
+                if first != src:                     # ideiglenes névről vissza az eredetire, ha lehet
+                    try:
+                        if not os.path.lexists(os.path.join(base, first)):
+                            os.rename(a, os.path.join(base, first))
+                    except OSError:
+                        pass
+        if not progress:                             # kör: az egyiket ideiglenes névre tesszük
+            src, dst = next(iter(pending.items()))
+            tmp = '.gc-rename-%s' % secrets.token_hex(4)
+            try:
+                os.rename(os.path.join(base, src), os.path.join(base, tmp))
+                orig[tmp] = orig.pop(src, src)
+                pending[tmp] = dst
+            except OSError as e:
+                errors.append('%s → %s: %s' % (src, dst, errtext(e, lang)))
+            del pending[src]
+    return {'done': done, 'errors': errors}
 
 
 # ------------------------------------------------------------------ HTTP
@@ -1416,7 +1766,12 @@ class Handler(http.server.BaseHTTPRequestHandler):
         self.send_json(check_update(q.get('force') == '1'))
 
     def api_get_list(self, q):
-        self.send_json(list_dir(norm(q.get('path') or '~')))
+        path = norm(q.get('path') or '~')
+        if not os.path.isdir(path):
+            s = split_arc(path)
+            if s:
+                return self.send_json(list_arc(*s))
+        self.send_json(list_dir(path))
 
     def api_get_drives(self, q):
         self.send_json({'drives': drives()})
@@ -1436,6 +1791,10 @@ class Handler(http.server.BaseHTTPRequestHandler):
     def api_get_raw(self, q):
         path = norm(q.get('path'))
         download = q.get('dl') == '1'
+        if not os.path.lexists(path):
+            s = split_arc(path)
+            if s:
+                return self.send_member(path, s, download)
         if os.path.isdir(path):
             raise GCError('is_dir')
         f = open(path, 'rb')
@@ -1495,14 +1854,53 @@ class Handler(http.server.BaseHTTPRequestHandler):
         finally:
             f.close()
 
+    def send_member(self, path, s, download):
+        """Archívumbeli fájl küldése (nézet, gyorsnézet, letöltés); tartományt nem támogat."""
+        f = arc_open(*s)
+        try:
+            ctype = mimetypes.guess_type(path)[0] or ''
+            head = f.read(8192)
+            extra = {}
+            if download:
+                ctype = ctype or 'application/octet-stream'
+            elif ctype.startswith(VIEWABLE) or ctype == 'application/pdf':
+                if ctype == 'image/svg+xml':
+                    extra['Content-Security-Policy'] = "sandbox; default-src 'none'; style-src 'unsafe-inline'"
+            elif b'\0' in head:
+                ctype, download = 'application/octet-stream', True
+            else:
+                ctype = 'text/plain; charset=utf-8'   # a HTML-t is forrásként mutatjuk (biztonság)
+            self.send_response(200)
+            self.send_header('Content-Type', ctype)
+            if f.size is not None:
+                self.send_header('Content-Length', str(f.size))
+            else:
+                self.send_header('Connection', 'close')
+                self.close_connection = True
+            self.send_header('X-Content-Type-Options', 'nosniff')
+            self.send_header('Cache-Control', 'no-store')
+            self.send_header('Content-Disposition', "%s; filename*=UTF-8''%s" % (
+                'attachment' if download else 'inline', urllib.parse.quote(os.path.basename(path))))
+            for k, v in extra.items():
+                self.send_header(k, v)
+            self.end_headers()
+            try:
+                b = head
+                while b:
+                    self.wfile.write(b)
+                    b = f.read(1 << 20)
+            except (BrokenPipeError, ConnectionResetError, ConnectionAbortedError):
+                self.close_connection = True
+        finally:
+            f.close()
+
     def api_get_text(self, q):
         path = norm(q.get('path'))
         if q.get('head') == '1':       # gyorsnézet: csak az eleje
             return self.text_head(path)
-        if os.path.getsize(path) > MAX_TEXT:
+        data, size = read_start(path, MAX_TEXT + 1)
+        if size > MAX_TEXT or len(data) > MAX_TEXT:
             raise GCError('text_too_big')
-        with open(path, 'rb') as f:
-            data = f.read()
         if b'\0' in data[:8192]:
             raise GCError('binary')
         try:
@@ -1512,9 +1910,7 @@ class Handler(http.server.BaseHTTPRequestHandler):
         self.send_json({'text': text, 'enc': enc, 'crlf': b'\r\n' in data, 'size': len(data)})
 
     def text_head(self, path, limit=256 * 1024):
-        size = os.path.getsize(path)
-        with open(path, 'rb') as f:
-            data = f.read(limit)
+        data, size = read_start(path, limit)
         if b'\0' in data[:8192]:
             raise GCError('binary')
         try:
@@ -1596,7 +1992,30 @@ class Handler(http.server.BaseHTTPRequestHandler):
         start_job(job, unpack_job, archives, dest, bool(b.get('subdir')), policy)
         self.send_json({'id': job.id})
 
+    def api_post_extract(self, q):
+        b = self.body
+        path = norm(b.get('path'))
+        s = split_arc(path)
+        if not s:
+            raise GCError('not_archive', path)
+        names = [n for n in (b.get('names') or []) if valid_name(n)]
+        if not names:
+            raise GCError('nothing_selected')
+        dest = norm(b.get('dest'))
+        policy = 'skip' if b.get('policy') == 'skip' else 'overwrite'
+        what = names[0] if len(names) == 1 else items_text(self.lang, len(names))
+        job = Job('unpack', '%s: %s → %s' % (self.t('job_extract'), what, dest), self.lang)
+        start_job(job, extract_job, s[0], s[1], s[2], names, dest, policy)
+        self.send_json({'id': job.id})
+
     # --- műveletek
+    def api_post_multirename(self, q):
+        b = self.body
+        pairs = b.get('pairs')
+        if not isinstance(pairs, list):
+            raise GCError('bad_json')
+        self.send_json(multi_rename(norm(b.get('dir')), pairs, self.lang))
+
     def api_post_text(self, q):
         b = self.body
         path = norm(b.get('path'))

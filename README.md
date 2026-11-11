@@ -82,6 +82,12 @@ For an unattended install: `sudo bash install.sh --yes --lang en --user gabor --
 - F3 view, F4 text editor, F7 new folder, F8 delete, F9 **permissions** (chmod and chown), F2 rename,
   Ctrl+C/X/V. **F1** lists every shortcut.
 - **Download folders**: a folder or several selected items download as one zip (Shift+F3), built on the fly.
+- **Look inside archives**: Enter opens a zip or tar(.gz/.xz/.bz2) like a folder, Ctrl+PgDn any zip/tar based
+  file too (e.g. .jar, .docx). Inside, F3 and quick view work; F5, drag & drop or Ctrl+C / Ctrl+V extract the selection.
+  Archives are read-only. Quick view of an archive lists its contents.
+- **Multi-rename** (Ctrl+M), like in Total Commander: name mask (`[N]`, `[N2-5]`, `[E]`, `[C]` counter, `[d]` date,
+  `[P]` parent folder, `[U]`/`[L]`/`[F]` case…), search and replace (regular expressions too), case conversion,
+  live preview with conflict checks, manual editing of the names and undo.
 - **Pack and unpack** (Alt+F5 / Alt+F9): zip, tar.gz, tar.xz, tar.bz2, in the background with progress.
   Unpacking skips paths that would escape the target folder.
 - **Filter** (Ctrl+F): show only the items that contain the typed text or match a pattern (`*.jpg; *.png`).
