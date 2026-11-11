@@ -30,7 +30,7 @@ The **setup wizard** asks a few questions. Press Enter to accept the default for
 3. **Port**, default **28090**. The wizard checks that the port is free and suggests another one if it isn't.
 4. **Where it is reachable from**: the whole network, or only localhost (behind a reverse proxy or SSH tunnel)
 5. **Password**, stored as a PBKDF2 hash, never in plain text
-6. **Update notice**: whether the UI should tell you when a new version is out
+6. **Updates**: whether the UI should tell you when a new version is out, and allow updating from there
 
 The wizard also installs missing packages (`python3`, `git`), opens the port in `ufw`/`firewalld` if you ask it to,
 and sets the program up as a **systemd service**. The service starts on every boot and is restarted
@@ -46,7 +46,13 @@ sudo gabo-commander update
 
 This pulls the latest version from GitHub, prints what changed and restarts the service with your settings.
 The current version is shown next to the logo in the UI. When a newer version is available on GitHub,
-a green **"New version"** badge appears in the menu bar.
+a green **"New version"** badge appears in the menu bar. Click it and press **"Update now"** to update from the UI:
+the server runs the same command, and the page reloads by itself.
+
+The app does not get root rights for this. It only drops a request file into `/var/lib/gabo-commander`, which the
+`gabo-commander-update.path` systemd unit watches; that runs `gabo-commander update` as root.
+The log is in `/var/log/gabo-commander-update.log`. Turning off the update notice in the wizard turns this off too.
+Older installations get it after one `sudo gabo-commander update`.
 
 ## Management command
 

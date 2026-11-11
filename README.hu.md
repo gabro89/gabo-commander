@@ -30,7 +30,7 @@ A **telepítő varázsló** néhány kérdést tesz fel, mindegyiknél Enterrel 
 3. **Port**, alapból **28090**. A varázsló megnézi, hogy szabad-e, és ha nem, másikat javasol.
 4. **Honnan érhető el**: az egész hálózatról, vagy csak a gépről (fordított proxy vagy SSH-alagút mögött)
 5. **Jelszó**: PBKDF2-hashként tárolja, sosem nyílt szövegként
-6. **Frissítésjelzés**: szóljon-e a felület, ha új verzió jelent meg
+6. **Frissítések**: szóljon-e a felület, ha új verzió jelent meg, és lehessen-e onnan frissíteni
 
 A varázsló a hiányzó csomagokat (`python3`, `git`) is felteszi, kérésre megnyitja a portot az `ufw`/`firewalld`
 tűzfalon, és **systemd szolgáltatásként** állítja be a programot. Így **a szerver minden újraindítása után
@@ -46,7 +46,14 @@ sudo gabo-commander update
 
 Letölti a legújabb verziót a GitHubról, kiírja, mi változott, és a beállításaid megtartásával újraindítja a szolgáltatást.
 A felületen a logó mellett látszik a verziószám. Ha a GitHubon újabb verzió van, a menüsorban megjelenik
-egy zöld **„Új verzió”** jelvény.
+egy zöld **„Új verzió”** jelvény. Rákattintva a **„Frissítés most”** gombbal a felületről is frissíthetsz:
+a szerver ugyanezt a parancsot futtatja le, majd az oldal magától újratöltődik.
+
+A felületről indított frissítéshez az app nem kap root jogot. Csak egy kérésfájlt tesz a
+`/var/lib/gabo-commander` mappába, amit a `gabo-commander-update.path` systemd egység figyel, és ez rootként
+lefuttatja a `gabo-commander update`-et. A napló: `/var/log/gabo-commander-update.log`.
+Ha a varázslóban kikapcsolod a frissítésjelzést, ez is kikapcsol. Régebbi telepítésen egy
+`sudo gabo-commander update` után lesz elérhető.
 
 ## Kezelő parancs
 

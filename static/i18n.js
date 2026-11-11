@@ -95,6 +95,13 @@ const I18N = {
     upd_badge: 'Új verzió: {0}', upd_badge_t: 'Elérhető egy új verzió – kattints a részletekért',
     upd_title: 'Frissítés elérhető', upd_body: 'A Gabo Commander új verziója jelent meg: <b>{1}</b> (most: {0}).',
     upd_howto: 'Frissítés a szerveren, egy paranccsal:', upd_changes: 'Változások', upd_later: 'Később',
+    upd_now: 'Frissítés most', upd_self: 'Innen is frissítheted: a szerver letölti az új verziót és újraindul, közben pár másodpercig nem érhető el.',
+    upd_or: 'Vagy a szerveren, egy paranccsal:',
+    upd_noself: 'Ha ezzel a paranccsal egyszer frissítesz, utána már innen, egy kattintással is lehet.',
+    upd_running_title: 'Frissítés', upd_running: '{0} telepítése… Ha kész, az oldal magától újratöltődik.',
+    upd_restarting: 'A szerver újraindul…', upd_done: 'Kész: {0}. Újratöltés…',
+    upd_failed: 'A frissítés nem sikerült. A napló:',
+    upd_timeout: 'A frissítés túl sokáig tart. A szerveren: sudo gabo-commander status',
 
     /* menü */
     m_files: 'Fájlok', m_mark: 'Jelölés', m_commands: 'Parancsok', m_view: 'Nézet', m_help: 'Súgó',
@@ -273,6 +280,13 @@ const I18N = {
     upd_badge: 'New version: {0}', upd_badge_t: 'A new version is available – click for details',
     upd_title: 'Update available', upd_body: 'A new version of Gabo Commander is out: <b>{1}</b> (current: {0}).',
     upd_howto: 'Update on the server with one command:', upd_changes: 'Changes', upd_later: 'Later',
+    upd_now: 'Update now', upd_self: 'You can update from here: the server downloads the new version and restarts, so it is unreachable for a few seconds.',
+    upd_or: 'Or on the server with one command:',
+    upd_noself: 'After you update once with this command, you can update from here with one click.',
+    upd_running_title: 'Updating', upd_running: 'Installing {0}… The page reloads by itself when it is done.',
+    upd_restarting: 'The server is restarting…', upd_done: 'Done: {0}. Reloading…',
+    upd_failed: 'The update failed. The log:',
+    upd_timeout: 'The update is taking too long. On the server: sudo gabo-commander status',
 
     m_files: 'Files', m_mark: 'Mark', m_commands: 'Commands', m_view: 'View', m_help: 'Help',
     mi_rename: 'Rename', mi_view: 'View', mi_edit: 'Edit', mi_newfile: 'New text file', mi_copy: 'Copy',

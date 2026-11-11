@@ -98,6 +98,7 @@ MSG = {
         'bad_name_x': 'Érvénytelen név: {0}', 'dup_target': 'Több elem kapná ugyanezt a nevet: {0}',
         'too_many': 'Túl sok elem egyszerre (max. {0})', 'encrypted': 'Jelszóval védett, nem nyitható meg: {0}',
         'job_extract': 'Kibontás',
+        'selfupdate_off': 'A felületről indított frissítés itt nem érhető el. A szerveren: sudo gabo-commander update',
         'running': 'Gabo Commander {0} fut:', 'user': 'Felhasználó: {0}',
         'no_password': 'Figyelem: nincs jelszó – csak megbízható belső hálózaton használd! (gabo-commander password)',
     },
@@ -125,6 +126,7 @@ MSG = {
         'bad_name_x': 'Invalid name: {0}', 'dup_target': 'Several items would get the same name: {0}',
         'too_many': 'Too many items at once (max. {0})', 'encrypted': 'Password protected, cannot be opened: {0}',
         'job_extract': 'Extract',
+        'selfupdate_off': 'Updating from the UI is not available here. On the server: sudo gabo-commander update',
         'running': 'Gabo Commander {0} is running:', 'user': 'User: {0}',
         'no_password': 'Warning: no password – use only on a trusted local network! (gabo-commander password)',
     },
@@ -1760,10 +1762,20 @@ class Handler(http.server.BaseHTTPRequestHandler):
         self.send_json({'sep': os.sep, 'home': os.path.expanduser('~'), 'user': user,
                         'host': socket.gethostname(), 'auth': auth_enabled(),
                         'win': IS_WIN, 'root': IS_ROOT, 'version': VERSION, 'lang': CONFIG['lang'],
-                        'repo': CONFIG['repo']})
+                        'repo': CONFIG['repo'], 'selfupdate': self_update_ok()})
 
     def api_get_update(self, q):
         self.send_json(check_update(q.get('force') == '1'))
+
+    def api_get_selfupdate(self, q):
+        self.send_json(self_update_status())
+
+    def api_post_selfupdate(self, q):
+        if not self_update_ok():
+            raise GCError('selfupdate_off')
+        with open(UPD_REQUEST, 'w') as f:
+            f.write('%d\n' % time.time())
+        self.send_json({'ok': True, 'now': time.time()})
 
     def api_get_list(self, q):
         path = norm(q.get('path') or '~')
@@ -2251,6 +2263,33 @@ def check_update(force=False):
         latest = UPDATE['latest']
     return {'enabled': True, 'current': VERSION, 'latest': latest, 'repo': CONFIG['repo'],
             'newer': bool(latest and vtuple(latest) > vtuple(VERSION))}
+
+
+# Frissítés a felületről: a kérésfájlt a gabo-commander-update.path systemd egység figyeli, és rootként
+# lefuttatja a "gabo-commander update"-et (install.sh hozza létre). Az app maga nem kap root jogot.
+UPD_REQUEST = '/var/lib/gabo-commander/update-request'
+UPD_LOG = '/var/log/gabo-commander-update.log'
+UPD_PATH_UNIT = '/etc/systemd/system/gabo-commander-update.path'
+
+
+def self_update_ok():
+    return (not IS_WIN and bool(CONFIG['update_check']) and os.path.isfile(UPD_PATH_UNIT)
+            and os.access(os.path.dirname(UPD_REQUEST), os.W_OK))
+
+
+def self_update_status():
+    log, at = '', 0.0
+    try:
+        with open(UPD_LOG, 'rb') as f:
+            f.seek(0, os.SEEK_END)
+            f.seek(max(0, f.tell() - 16384))
+            log = f.read().decode('utf-8', 'replace')
+            at = os.fstat(f.fileno()).st_mtime
+    except OSError:
+        pass
+    m = re.search(r'^== exit (\d+)\s*$', log, re.M)
+    return {'version': VERSION, 'pending': os.path.exists(UPD_REQUEST), 'log': log, 'log_at': at,
+            'done': bool(m), 'code': int(m.group(1)) if m else None, 'now': time.time()}
 
 
 class _StreamOut:

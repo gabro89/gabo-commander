@@ -5,6 +5,11 @@
 
 ## Unreleased
 
+- Update from the UI: *Update now* in the new-version dialog. The app gets no root rights: a systemd unit runs `gabo-commander update`.
+  Available after one more `sudo gabo-commander update`.
+  · Frissítés a felületről: *Frissítés most* az új verzió ablakában. Az app nem kap root jogot: egy systemd egység futtatja a
+  `gabo-commander update`-et. Egy újabb `sudo gabo-commander update` után érhető el.
+
 ## 1.4.0 – 2026-11-11
 
 - Lynx-style navigation, can be turned on in the *View* menu: → enters the folder or archive, ← goes to the parent folder.

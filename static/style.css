@@ -130,6 +130,9 @@ button[hidden] { display: none; }
   background: #2e9b36; color: #fff; border: 1px solid #237a2a; border-radius: 9px; cursor: pointer;
 }
 #menubar .upd:hover { background: #36ad3f; }
+pre.upd-log { max-height: 260px; overflow: auto; margin: 0 0 8px; padding: 6px 8px; font: 12px/1.4 Consolas, "DejaVu Sans Mono", monospace;
+  background: var(--list); border: 1px solid var(--line); white-space: pre-wrap; user-select: text; }
+pre.upd-log[hidden] { display: none; }
 pre.cmd { background: #1e1e1e; color: #e6e6e6; padding: 6px 10px; border-radius: 3px; user-select: all; font-size: 13px; }
 
 /* ---------- gombsor: lapos ikonok, fölé víve kiemelkednek (TC-stílus) */

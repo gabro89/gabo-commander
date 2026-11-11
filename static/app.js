@@ -1743,12 +1743,61 @@ async function cmdUpdate(force) {
   if (force) await checkUpdate(true);
   if (!UPDATE || !UPDATE.newer) return cmdAbout();
   const repo = repoUrl();
-  await modal({
-    title: t('upd_title'), buttons: [{ label: t('ok'), value: 'ok', primary: true }],
+  const self = !!INFO.selfupdate;
+  const r = await modal({
+    title: t('upd_title'),
+    buttons: self ? [{ label: t('upd_now'), value: 'go', primary: true }, { label: t('upd_later'), value: null }]
+      : [{ label: t('ok'), value: 'ok', primary: true }],
     body: `<p>${t('upd_body', esc('v' + INFO.version), esc('v' + UPDATE.latest))}</p>
-      <p>${t('upd_howto')}</p><pre class="cmd">sudo gabo-commander update</pre>
+      ${self ? `<p>${t('upd_self')}</p><p class="hint">${t('upd_or')}</p>` : `<p>${t('upd_howto')}</p>`}
+      <pre class="cmd">sudo gabo-commander update</pre>
+      ${self ? '' : `<p class="hint">${t('upd_noself')}</p>`}
       ${repo ? `<p class="hint"><a href="${esc(repo)}/blob/main/CHANGELOG.md" target="_blank" rel="noopener">${t('upd_changes')}</a></p>` : ''}`,
   });
+  if (r && r._btn === 'go') await selfUpdate();
+}
+
+/* frissítés a felületről: a szerver rootként futó frissítő egységet indít, mi addig figyelünk,
+   amíg az új verzió el nem indul, aztán újratöltjük az oldalt */
+const sleep = ms => new Promise(res => setTimeout(res, ms));
+async function selfUpdate() {
+  const from = INFO.version;
+  const { now: t0 } = await POST('/api/selfupdate');
+  let form = null;
+  modal({
+    title: t('upd_running_title'), cancel: null, buttons: [], cls: 'wide',
+    body: `<p class="upd-msg">${esc(t('upd_running', 'v' + UPDATE.latest))}</p><pre class="upd-log" hidden></pre>`,
+    onOpen(f, close) { form = f; form._close = close; },
+  });
+  const msg = s => { form.querySelector('.upd-msg').textContent = s; };
+  const finish = (text, log) => {
+    msg(text);
+    const pre = form.querySelector('.upd-log');
+    if (log) { pre.hidden = false; pre.textContent = log; pre.scrollTop = pre.scrollHeight; }
+    const b = document.createElement('button');
+    b.type = 'button'; b.className = 'primary'; b.textContent = t('close');
+    b.addEventListener('click', () => form._close('x'));
+    form.querySelector('.dlg-btns').appendChild(b);
+    b.focus();
+  };
+  for (let i = 0; i < 180; i++) {          // legfeljebb ~6 perc
+    await sleep(2000);
+    let s;
+    try { s = await GET('/api/selfupdate'); } catch (e) { msg(t('upd_restarting')); continue; }
+    const fresh = s.log_at >= t0 - 1;
+    if (s.version !== from || (fresh && s.done && s.code === 0)) {
+      msg(t('upd_done', 'v' + s.version));
+      await sleep(1200);
+      location.reload();
+      return;
+    }
+    if (fresh && s.done) { finish(t('upd_failed'), s.log); return; }
+    if (fresh && s.log) {
+      const pre = form.querySelector('.upd-log');
+      pre.hidden = false; pre.textContent = s.log; pre.scrollTop = pre.scrollHeight;
+    }
+  }
+  finish(t('upd_timeout'), '');
 }
 
 /* ------------------------------------------------------------ menüsor (F10) */

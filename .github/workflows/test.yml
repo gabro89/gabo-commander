@@ -65,6 +65,18 @@ jobs:
           sudo gabo-commander update --force
           systemctl is-active gabo-commander
           curl -fsS http://127.0.0.1:28090/api/info
+      - name: Update from the UI (systemd path unit)
+        run: |
+          systemctl is-enabled gabo-commander-update.path
+          curl -fsS http://127.0.0.1:28090/api/info | tee info.json
+          grep -q '"selfupdate": true' info.json
+          curl -fsS -H 'X-GC: 1' -X POST http://127.0.0.1:28090/api/selfupdate
+          for i in $(seq 1 90); do sudo grep -q '^== exit' /var/log/gabo-commander-update.log 2>/dev/null && break; sleep 1; done
+          sudo cat /var/log/gabo-commander-update.log
+          sudo grep -q '^== exit 0' /var/log/gabo-commander-update.log
+          sudo test ! -e /var/lib/gabo-commander/update-request
+          for i in $(seq 1 20); do curl -fsS http://127.0.0.1:28090/api/selfupdate >/dev/null 2>&1 && break; sleep 0.5; done
+          curl -fsS http://127.0.0.1:28090/api/selfupdate | grep -q '"done": true'
       - name: Reinstall keeps the settings
         run: |
           sudo bash /opt/gabo-commander/install.sh --yes

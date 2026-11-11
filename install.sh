@@ -26,6 +26,9 @@ BRANCH="${GC_BRANCH:-main}"
 DEST=/opt/gabo-commander
 ENV_FILE=/etc/gabo-commander.env
 UNIT=/etc/systemd/system/gabo-commander.service
+UPD_UNIT=/etc/systemd/system/gabo-commander-update.service
+UPD_PATH=/etc/systemd/system/gabo-commander-update.path
+UPD_LOG=/var/log/gabo-commander-update.log
 BIN=/usr/local/bin/gabo-commander
 SERVICE=gabo-commander
 DEFAULT_PORT=28090
@@ -335,12 +338,47 @@ EOF
 exec bash $DEST/gabo-commander.sh "\$@"
 EOF
   chmod 755 "$BIN"
+  write_updater
+}
+
+# Frissítés a felületről: az app (a saját jogaival) csak egy kérésfájlt tesz a StateDirectory-ba;
+# a .path egység erre elindítja a rootként futó, egyetlen dolgot tudó frissítő szolgáltatást.
+# A napló root tulajdonú helyre kerül (a felhasználó mappájába root nem ír – symlinkes trükk ellen).
+# In-app update: the app only drops a request file; the .path unit starts the root-only updater.
+write_updater() {
+  if [ "$NEW_UPD" != 1 ]; then
+    systemctl disable --now gabo-commander-update.path >/dev/null 2>&1 || true
+    rm -f "$UPD_UNIT" "$UPD_PATH"
+    return 0
+  fi
+  cat >"$UPD_UNIT" <<EOF
+[Unit]
+Description=Gabo Commander update (requested from the web UI)
+
+[Service]
+Type=oneshot
+Environment=HOME=/root
+ExecStartPre=-/bin/rm -f /var/lib/gabo-commander/update-request
+ExecStart=/bin/sh -c '{ date; bash $DEST/gabo-commander.sh update; echo "== exit \$\$?"; } >$UPD_LOG 2>&1'
+EOF
+  cat >"$UPD_PATH" <<EOF
+[Unit]
+Description=Gabo Commander – waits for an update request from the web UI
+
+[Path]
+PathExists=/var/lib/gabo-commander/update-request
+Unit=gabo-commander-update.service
+
+[Install]
+WantedBy=multi-user.target
+EOF
 }
 
 start_service() {
   systemctl daemon-reload
   systemctl enable "$SERVICE" >/dev/null 2>&1
   systemctl restart "$SERVICE"
+  if [ -f "$UPD_PATH" ]; then systemctl enable --now gabo-commander-update.path >/dev/null 2>&1 || true; fi
   local h=127.0.0.1 i
   case "$NEW_HOST" in 0.0.0.0|127.0.0.1|::|"") ;; *) h="$NEW_HOST" ;; esac
   for i in $(seq 1 20); do
@@ -465,10 +503,12 @@ if [ "$MODE" = wizard ]; then
 
   # 5. frissítés-ellenőrzés
   title "5/5  Frissítések" "5/5  Updates"
-  say "A felület naponta párszor megnézi a GitHubon, van-e új verzió, és jelzi (csak a verziószámot tölti le)." \
-      "The UI checks GitHub a few times a day for a new version and shows a notice (it only downloads the version number)."
+  say "A felület óránként megnézi a GitHubon, van-e új verzió, és jelzi (csak a verziószámot tölti le)." \
+      "The UI checks GitHub every hour for a new version and shows a notice (it only downloads the version number)."
+  say "Ilyenkor a felületről egy kattintással frissíthető is (ugyanaz, mint a sudo gabo-commander update)." \
+      "It can then also be updated from the UI with one click (same as sudo gabo-commander update)."
   if [ -z "$OPT_UPD" ]; then
-    if yesno "Jelezze, ha van új verzió?" "Notify about new versions?" "$([ "$NEW_UPD" = 0 ] && echo n || echo y)"; then NEW_UPD=1; else NEW_UPD=0; fi
+    if yesno "Jelezze, ha van új verzió, és lehessen a felületről frissíteni?" "Notify about new versions and allow updating from the UI?" "$([ "$NEW_UPD" = 0 ] && echo n || echo y)"; then NEW_UPD=1; else NEW_UPD=0; fi
   fi
 
   # összegzés

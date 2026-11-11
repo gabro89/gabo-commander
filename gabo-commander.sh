@@ -136,8 +136,9 @@ case "$CMD" in
     printf '%s' "$(m 'Biztosan eltávolítod a Gabo Commandert? [i/N]: ' 'Really uninstall Gabo Commander? [y/N]: ')"
     IFS= read -r a </dev/tty || a=""
     case "$(printf '%s' "$a" | tr '[:upper:]' '[:lower:]')" in y|yes|i|igen) ;; *) die "Megszakítva." "Cancelled." ;; esac
-    systemctl disable --now "$SERVICE" >/dev/null 2>&1 || true
-    rm -f "$UNIT" "$BIN"
+    systemctl disable --now "$SERVICE" gabo-commander-update.path >/dev/null 2>&1 || true
+    rm -f "$UNIT" "$BIN" /etc/systemd/system/gabo-commander-update.service /etc/systemd/system/gabo-commander-update.path \
+          /var/log/gabo-commander-update.log
     systemctl daemon-reload
     ok "Szolgáltatás eltávolítva." "Service removed."
     printf '%s' "$(m "A beállítások ($ENV_FILE) és a program ($DIR) is törlődjön? [i/N]: " "Also delete the settings ($ENV_FILE) and the program ($DIR)? [y/N]: ")"
