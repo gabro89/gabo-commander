@@ -65,6 +65,19 @@ jobs:
           sudo gabo-commander update --force
           systemctl is-active gabo-commander
           curl -fsS http://127.0.0.1:28090/api/info
+      - name: Hardlinks are safe (delete one name, move onto the other)
+        run: |
+          H='-H X-GC:1 -H Content-Type:application/json'
+          mkdir -p /tmp/hl/a /tmp/hl/b && head -c 50000 /dev/urandom > /tmp/hl/a/f.bin && ln /tmp/hl/a/f.bin /tmp/hl/b/f.bin
+          cp /tmp/hl/a/f.bin /tmp/hl.orig
+          sudo chown -R "$(sed -n 's/^User=//p' /etc/systemd/system/gabo-commander.service)" /tmp/hl
+          curl -fsS $H -d '{"sources":["/tmp/hl/a/f.bin"],"dest":"/tmp/hl/b","move":true,"policy":"overwrite"}' http://127.0.0.1:28090/api/copy
+          for i in $(seq 1 20); do [ ! -e /tmp/hl/a/f.bin ] && break; sleep 0.5; done
+          test ! -e /tmp/hl/a/f.bin && cmp /tmp/hl.orig /tmp/hl/b/f.bin
+          ln /tmp/hl/b/f.bin /tmp/hl/a/g.bin
+          curl -fsS $H -d '{"paths":["/tmp/hl/a/g.bin"]}' http://127.0.0.1:28090/api/delete
+          for i in $(seq 1 20); do [ ! -e /tmp/hl/a/g.bin ] && break; sleep 0.5; done
+          test ! -e /tmp/hl/a/g.bin && cmp /tmp/hl.orig /tmp/hl/b/f.bin
       - name: Update from the UI (systemd path unit)
         run: |
           systemctl is-enabled gabo-commander-update.path

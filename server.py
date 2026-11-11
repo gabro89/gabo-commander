@@ -547,6 +547,15 @@ def same_inode(a, b):
     return (sa.st_dev, sa.st_ino) == (sb.st_dev, sb.st_ino) and sa.st_ino != 0
 
 
+def same_dir_entry(a, b):
+    """Ugyanaz a könyvtárbejegyzés-e (pl. symlinkelt mappán át), nem csak két hardlink ugyanarra a fájlra."""
+    pa, pb = os.path.realpath(os.path.dirname(a)), os.path.realpath(os.path.dirname(b))
+    if os.path.normcase(pa) != os.path.normcase(pb):
+        return False
+    na, nb = os.path.basename(a), os.path.basename(b)
+    return na == nb or na.lower() == nb.lower()      # kis/nagybetűre nem érzékeny fájlrendszeren is
+
+
 def copy_file(job, src, dst, size):
     """Ideiglenes fájlba ír, és csak a végén cseréli le a célt: megszakításkor, betelt lemeznél
     a korábbi célfájl épen marad."""
@@ -694,9 +703,19 @@ def copy_job(job, sources, dest, move, policy):
                     os.mkdir(d)
                 op[4] = True
                 continue
-            if os.path.lexists(d):
-                if same_inode(s, d):            # ugyanaz a fájl más úton: felülírva elveszne (áthelyezésnél törölve is)
+            if os.path.lexists(d) and same_inode(s, d):
+                # Ugyanaz a fájl. Felülírni nem szabad: írás közben kiürülne (áthelyezésnél utána törlődne is).
+                if same_dir_entry(s, d):        # ugyanaz a bejegyzés más úton (symlinkelt mappa): nincs teendő
                     raise GCError('same_file', d)
+                # Hardlink: a célban már ott van a tartalom. Másolásnál kész; áthelyezésnél csak a forrás
+                # nevét töröljük – a cél (és a tartalom) megmarad, pont mint egy sikeres áthelyezés után.
+                if move:
+                    os.unlink(s)
+                job.done_bytes += size
+                job.done_files += 1
+                job.tick()
+                continue
+            if os.path.lexists(d):
                 if policy == 'skip' or (policy == 'newer' and os.lstat(d).st_mtime >= os.lstat(s).st_mtime):
                     job.done_bytes += size
                     job.done_files += 1

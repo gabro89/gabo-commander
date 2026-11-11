@@ -5,6 +5,11 @@
 
 ## Unreleased
 
+- Moving a file onto its own hardlink removes just the source name, and the target keeps the content. Copying onto it has nothing to do.
+  Deleting one hardlink still leaves the other one intact.
+  · Ha egy fájlt a saját hardlinkjére helyezel át, csak a forrás neve törlődik, a cél tartalma megmarad; másolásnál nincs teendő.
+  Egy hardlink törlése továbbra is épen hagyja a másikat.
+
 ## 1.5.1 – 2026-11-11
 
 - Fix: going up from a folder no longer jumps to the top of the list; the cursor stays visible on the folder you left.
