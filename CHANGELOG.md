@@ -5,6 +5,8 @@
 
 ## Unreleased
 
+## 1.4.0 – 2026-11-11
+
 - Lynx-style navigation, can be turned on in the *View* menu: → enters the folder or archive, ← goes to the parent folder.
   · Lynx-navigáció, a *Nézet* menüben kapcsolható be: → belép a mappába vagy archívumba, ← a szülő mappába lép.
 
