@@ -5,6 +5,8 @@
 
 ## Unreleased
 
+## 1.5.0 – 2026-11-11
+
 - Update from the UI: *Update now* in the new-version dialog. The app gets no root rights: a systemd unit runs `gabo-commander update`.
   Available after one more `sudo gabo-commander update`.
   · Frissítés a felületről: *Frissítés most* az új verzió ablakában. Az app nem kap root jogot: egy systemd egység futtatja a
