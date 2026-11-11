@@ -72,6 +72,12 @@ function baseName(p) {
   return m.slice(Math.max(m.lastIndexOf('/'), m.lastIndexOf('\\')) + 1);
 }
 const isAbs = p => p.startsWith('/') || p.startsWith('~') || /^[a-zA-Z]:[\\/]/.test(p);
+const resolvePath = (base, v) => (isAbs(v) ? v : pjoin(base, v));     /* relatív útvonal a base mappához képest */
+
+/* minták: *.jpg; *.png – reEsc: szöveg regexbe, globSrc: minta (* ?) regexbe, globList: több minta szétszedése */
+const reEsc = s => s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+const globSrc = g => reEsc(g).replace(/\\\*/g, '.*').replace(/\\\?/g, '.');
+const globList = s => s.split(/[;,\s]+/).filter(Boolean);
 const rootOf = p => (INFO.win ? p.slice(0, 3) : '/');
 function under(path, root) {
   if (path === root) return true;
@@ -536,8 +542,8 @@ class Panel {
   filterRe() {
     const f = this.filter.trim();
     if (!f) return null;
-    const parts = f.split(/[;,\s]+/).filter(Boolean).map(g => {
-      const x = g.replace(/[.+^${}()|[\]\\]/g, '\\$&').replace(/\*/g, '.*').replace(/\?/g, '.');
+    const parts = globList(f).map(g => {
+      const x = globSrc(g);
       return /[*?]/.test(g) ? '^' + x + '$' : x;
     });
     return new RegExp(parts.join('|'), 'i');
@@ -879,6 +885,22 @@ function modal(o) {
 const POLICIES = ['ask', 'overwrite', 'skip', 'newer', 'rename'];
 const policySelect = cur => `<select name="policy">${POLICIES.map(v => `<option value="${v}"${v === cur ? ' selected' : ''}>${esc(t('pol_' + v))}</option>`).join('')}</select>`;
 const icon = e => `<i class="ic ic-${e.ic}"></i>`;
+const whatText = names => (names.length === 1 ? t('quoted', names[0]) : t('n_items', names.length));
+/* ha a másik panel ugyanazt a mappát mutatja, azt is frissíteni kell */
+const syncOther = p => (p.other.path === p.path ? p.other.refresh() : null);
+/* kicsomagolás / kibontás: felülír vagy kihagy (az utolsó választást megjegyzi) */
+const unpackPolicy = () => {
+  const pol = store.get('unpackpol', 'overwrite');
+  return `<label>${t('if_exists')}<select name="policy"><option value="overwrite">${esc(t('pol_overwrite'))}</option><option value="skip"${pol === 'skip' ? ' selected' : ''}>${esc(t('pol_skip'))}</option></select></label>`;
+};
+/* fel / le nyíl gombok listáján a dialógusokban (meghajtók, kedvencek); true, ha kezelte */
+function listNav(ev, form, sel) {
+  if (ev.key !== 'ArrowDown' && ev.key !== 'ArrowUp') return false;
+  ev.preventDefault();
+  const bs = [...form.querySelectorAll(sel)];
+  if (bs.length) bs[(bs.indexOf(document.activeElement) + (ev.key === 'ArrowDown' ? 1 : -1) + bs.length) % bs.length].focus();
+  return true;
+}
 
 /* archívumban nem lehet módosítani: a hívó parancs hibaüzenettel leáll */
 function ro(p = active) { if (p && p.arc) throw new Error(t('arc_readonly')); }
@@ -893,7 +915,7 @@ async function copyDialog(move, src = active, dest, items) {
   }
   if (!dest) ro(src.other);
   dest = dest || src.other.path;
-  const what = items.length === 1 ? t('quoted', items[0].n) : t('n_items', items.length);
+  const what = whatText(items.map(e => e.n));
   const r = await modal({
     title: t(move ? 'move_title' : 'copy_title'),
     ok: t(move ? 'move_btn' : 'copy_btn'),
@@ -902,11 +924,10 @@ async function copyDialog(move, src = active, dest, items) {
            <p class="hint">${t('copy_hint')}</p>`,
   });
   if (!r) return;
-  let d = r.dest.trim();
+  const d = r.dest.trim();
   if (!d) return;
-  if (!isAbs(d)) d = pjoin(src.path, d);
   store.set('policy', r.policy);
-  await POST('/api/copy', { sources: items.map(e => pjoin(src.path, e.n)), dest: d, move, policy: r.policy });
+  await POST('/api/copy', { sources: items.map(e => pjoin(src.path, e.n)), dest: resolvePath(src.path, d), move, policy: r.policy });
   src.selectNone();
   pollSoon();
 }
@@ -932,9 +953,9 @@ async function cmdMkdir() {
   const r = await modal({ title: t('mkdir_title'), ok: t('create_btn'), body: `<label>${t('mkdir_label')}<input name="name"></label>` });
   if (!r || !r.name.trim()) return;
   const name = r.name.trim();
-  await POST('/api/mkdir', { path: isAbs(name) ? name : pjoin(p.path, name), parents: true });
+  await POST('/api/mkdir', { path: resolvePath(p.path, name), parents: true });
   await p.load(p.path, name.split(/[\\/]/)[0], false);
-  if (p.other.path === p.path) p.other.refresh();
+  syncOther(p);
 }
 
 async function cmdNewFile() {
@@ -943,7 +964,7 @@ async function cmdNewFile() {
   const r = await modal({ title: t('newfile_title'), ok: t('newfile_btn'), body: `<label>${t('newfile_label')}<input name="name" value="${t('newfile_default')}"></label>` });
   if (!r || !r.name.trim()) return;
   const name = r.name.trim();
-  const path = isAbs(name) ? name : pjoin(p.path, name);
+  const path = resolvePath(p.path, name);
   await POST('/api/mkfile', { path });
   await p.load(p.path, baseName(path), false);
   await cmdEdit(path);
@@ -968,13 +989,12 @@ async function cmdRename() {
   await POST('/api/rename', { path: pjoin(p.path, e.n), name });
   p.sel.delete(e.n);
   await p.load(p.path, name, false);
-  if (p.other.path === p.path) p.other.refresh();
+  syncOther(p);
 }
 
 /* ------------------------------------------------------------ csoportos átnevezés (Ctrl+M), mint a TC-ben */
 const MR_DEF = { mask: '[N]', ext: '[E]', search: '', replace: '', regex: false, cs: false, first: false, kase: 'keep', cstart: '1', cstep: '1', cdigits: '1' };
 const MR_INS = ['[N]', '[N1-3]', '[E]', '[C]', '[P]', '[d]', '[t]', '[Y]', '[M]', '[D]', '[h]', '[m]', '[U]', '[L]', '[F]', '[n]'];
-const reEsc = s => s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
 
 /* [N2-5] 2–5. karakter, [N2,3] 3 karakter a 2.-tól, [N2-] a 2.-tól a végéig, [N-3-] az utolsó 3, [N-5] hátulról az 5. */
 function mrRange(s, spec) {
@@ -1225,7 +1245,7 @@ async function cmdMultiRename() {
   p.sel = sel;
   const cur = p.view[p.cursor];
   await p.load(p.path, cur ? (map.get(cur.n) || cur.n) : null, false);
-  if (p.other.path === p.path) p.other.refresh();
+  syncOther(p);
   if (out.errors.length) toast(t('n_errors_first', out.errors.length, out.errors[0]), 'err');
   else toast(t(r._btn === 'undo' ? 'mr_undone' : 'mr_done', out.done.length), 'ok');
 }
@@ -1264,7 +1284,7 @@ async function cmdPack() {
   let fmt = store.get('packfmt', 'zip');
   if (!PACK_FMTS.includes(fmt)) fmt = 'zip';
   const base = items.length === 1 ? (items[0].d ? items[0].n : items[0].base) : (baseName(p.path) || 'archive');
-  const what = items.length === 1 ? t('quoted', items[0].n) : t('n_items', items.length);
+  const what = whatText(items.map(e => e.n));
   const r = await modal({
     title: t('pack_title'), ok: t('pack_btn'),
     body: `<label>${t('pack_what', esc(what))}<input name="dest" value="${esc(pjoin(p.other.arc ? p.path : p.other.path, base + '.' + fmt))}"></label>
@@ -1278,8 +1298,7 @@ async function cmdPack() {
     },
   });
   if (!r || !r.dest.trim()) return;
-  let dest = r.dest.trim();
-  if (!isAbs(dest)) dest = pjoin(p.path, dest);
+  const dest = resolvePath(p.path, r.dest.trim());
   store.set('packfmt', r.format);
   await POST('/api/pack', { sources: items.map(e => pjoin(p.path, e.n)), dest, format: r.format });
   p.selectNone();
@@ -1291,17 +1310,15 @@ async function cmdUnpack() {
   ro(p);
   const items = p.targets().filter(e => !e.d && ARCH_RE.test(e.n));
   if (!items.length) { toast(t('unpack_none'), 'err'); return; }
-  const what = items.length === 1 ? t('quoted', items[0].n) : t('n_items', items.length);
-  const pol = store.get('unpackpol', 'overwrite');
+  const what = whatText(items.map(e => e.n));
   const r = await modal({
     title: t('unpack_title'), ok: t('unpack_btn'),
     body: `<label>${t('unpack_to', esc(what))}<input name="dest" value="${esc(p.other.arc ? p.path : p.other.path)}"></label>
            <label class="chk"><input type="checkbox" name="subdir"${store.get('unpacksub', true) ? ' checked' : ''}> ${t('unpack_subdir')}</label>
-           <label>${t('if_exists')}<select name="policy"><option value="overwrite">${esc(t('pol_overwrite'))}</option><option value="skip"${pol === 'skip' ? ' selected' : ''}>${esc(t('pol_skip'))}</option></select></label>`,
+           ${unpackPolicy()}`,
   });
   if (!r || !r.dest.trim()) return;
-  let dest = r.dest.trim();
-  if (!isAbs(dest)) dest = pjoin(p.path, dest);
+  const dest = resolvePath(p.path, r.dest.trim());
   store.set('unpacksub', !!r.subdir);
   store.set('unpackpol', r.policy);
   await POST('/api/unpack', { archives: items.map(e => pjoin(p.path, e.n)), dest, subdir: !!r.subdir, policy: r.policy });
@@ -1312,16 +1329,14 @@ async function cmdUnpack() {
 /* kijelölt elemek kibontása egy archívum belsejéből (F5, húzás, Ctrl+C / Ctrl+V); base: a relatív cél alapja */
 async function extractDialog(path, names, dest, base) {
   if (!names.length) return;
-  const what = names.length === 1 ? t('quoted', names[0]) : t('n_items', names.length);
-  const pol = store.get('unpackpol', 'overwrite');
+  const what = whatText(names);
   const r = await modal({
     title: t('extract_title'), ok: t('extract_btn'),
     body: `<label>${t('extract_to', esc(what))}<input name="dest" value="${esc(dest)}"></label>
-           <label>${t('if_exists')}<select name="policy"><option value="overwrite">${esc(t('pol_overwrite'))}</option><option value="skip"${pol === 'skip' ? ' selected' : ''}>${esc(t('pol_skip'))}</option></select></label>`,
+           ${unpackPolicy()}`,
   });
   if (!r || !r.dest.trim()) return;
-  let d = r.dest.trim();
-  if (!isAbs(d)) d = pjoin(base, d);
+  const d = resolvePath(base, r.dest.trim());
   store.set('unpackpol', r.policy);
   await POST('/api/extract', { path, names, dest: d, policy: r.policy });
   for (const p of Object.values(panels)) if (p.path === path) p.selectNone();
@@ -1375,13 +1390,8 @@ async function favMenu(p = active) {
       form._draw();
     },
     onKey(ev, close, form) {
-      const bs = [...form.querySelectorAll('.fav')];
-      const i = bs.indexOf(document.activeElement);
-      if (ev.key === 'ArrowDown' || ev.key === 'ArrowUp') {
-        ev.preventDefault();
-        if (bs.length) bs[(i + (ev.key === 'ArrowDown' ? 1 : -1) + bs.length) % bs.length].focus();
-        return true;
-      }
+      if (listNav(ev, form, '.fav')) return true;
+      const i = [...form.querySelectorAll('.fav')].indexOf(document.activeElement);
       if (ev.key === 'Delete' && i >= 0) { ev.preventDefault(); form._del(i); return true; }
       return false;
     },
@@ -1470,9 +1480,14 @@ function qvArcHtml(d) {
 }
 
 /* ------------------------------------------------------------ téma és sorhossz */
+/* data-theme: a választás (auto / light / dark); data-dark: most sötét-e – a CSS csak ezt nézi */
+const DARK_MQ = matchMedia('(prefers-color-scheme: dark)');
 function applyTheme(m) {
-  document.documentElement.dataset.theme = ['light', 'dark'].includes(m) ? m : 'auto';
+  const r = document.documentElement;
+  r.dataset.theme = ['light', 'dark'].includes(m) ? m : 'auto';
+  r.toggleAttribute('data-dark', r.dataset.theme === 'dark' || (r.dataset.theme === 'auto' && DARK_MQ.matches));
 }
+DARK_MQ.addEventListener('change', () => applyTheme(document.documentElement.dataset.theme));
 function setTheme(m) { store.set('theme', m); applyTheme(m); }
 
 function updateRowH() {
@@ -1572,7 +1587,7 @@ async function cmdChmod() {
   if (res.error_count) toast(t('n_errors_first', res.error_count, res.errors[0]), 'err');
   else toast(t('chmod_done', res.count), 'ok');
   await p.refresh();
-  if (p.other.path === p.path) p.other.refresh();
+  syncOther(p);
 }
 
 async function selectPattern(on) {
@@ -1583,10 +1598,10 @@ async function selectPattern(on) {
     body: `<label>${t('pattern_label')}<input name="pat" value="${esc(def)}"></label><label class="chk"><input type="checkbox" name="dirs"> ${t('pattern_dirs')}</label>`,
   });
   if (!r || !r.pat.trim()) return;
-  const res = r.pat.split(/[;,\s]+/).filter(Boolean).map(g => new RegExp('^' + g.replace(/[.+^${}()|[\]\\]/g, '\\$&').replace(/\*/g, '.*').replace(/\?/g, '.') + '$', 'i'));
+  const re = new RegExp('^(?:' + globList(r.pat).map(globSrc).join('|') + ')$', 'i');
   for (const e of p.view) {
     if (e.up || (e.d && !r.dirs)) continue;
-    if (res.some(x => x.test(e.n))) p.setSel(e, on);
+    if (re.test(e.n)) p.setSel(e, on);
   }
   p.render(); p.updateStatus();
 }
@@ -1651,17 +1666,7 @@ async function driveMenu(p) {
       if (bs[ci]) bs[ci].focus();
       bs.forEach(b => b.addEventListener('click', () => close(DRIVES[+b.dataset.i].path)));
     },
-    onKey(ev, close, form) {
-      const bs = [...form.querySelectorAll('.menu-drv')];
-      const i = bs.indexOf(document.activeElement);
-      if (ev.key === 'ArrowDown' || ev.key === 'ArrowUp') {
-        ev.preventDefault();
-        const n = (i + (ev.key === 'ArrowDown' ? 1 : -1) + bs.length) % bs.length;
-        if (bs[n]) bs[n].focus();
-        return true;
-      }
-      return false;
-    },
+    onKey(ev, close, form) { return listNav(ev, form, '.menu-drv'); },
   });
   if (r) await p.load(r._btn);
 }
@@ -1976,7 +1981,7 @@ async function pollJobs() {
   } catch (e) { /* csendben újrapróbáljuk */ }
   renderJobs();
   const busy = serverJobs.some(j => !j.finished);
-  pollTimer = setTimeout(pollJobs, busy ? 500 : 3000);
+  pollTimer = setTimeout(pollJobs, busy ? 500 : document.hidden ? 20000 : 3000);   // háttérben lévő lapon ritkábban
 }
 function pollSoon() { clearTimeout(pollTimer); pollTimer = setTimeout(pollJobs, 150); }
 
@@ -2340,7 +2345,8 @@ async function init() {
   await Promise.all([start(panels.L, INFO.home), start(panels.R, INFO.win ? INFO.home : '/')]);
   lastFocusRefresh = Date.now();
   pollJobs();
-  setInterval(loadDrives, 30000);
+  setInterval(() => { if (!document.hidden) loadDrives(); }, 30000);
+  document.addEventListener('visibilitychange', () => { if (!document.hidden) pollSoon(); });
   checkUpdate(false);
   setInterval(() => checkUpdate(false), 3600 * 1000);
 }

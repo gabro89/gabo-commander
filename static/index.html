@@ -7,7 +7,13 @@
 <link rel="icon" href="favicon.svg" type="image/svg+xml">
 <link rel="apple-touch-icon" href="favicon.svg">
 <meta name="theme-color" content="#0078d7">
-<script>try { document.documentElement.dataset.theme = JSON.parse(localStorage.getItem('gc.theme')) || 'auto'; } catch (e) { document.documentElement.dataset.theme = 'auto'; }</script>
+<script>/* téma még a rajzolás előtt (ne villanjon): data-theme = választás, data-dark = most sötét-e */
+(function () {
+  var r = document.documentElement, m = 'auto';
+  try { m = JSON.parse(localStorage.getItem('gc.theme')) || 'auto'; } catch (e) { /* privát mód */ }
+  r.dataset.theme = m;
+  if (m === 'dark' || (m !== 'light' && matchMedia('(prefers-color-scheme: dark)').matches)) r.dataset.dark = '';
+})();</script>
 <link rel="stylesheet" href="style.css">
 </head>
 <body>

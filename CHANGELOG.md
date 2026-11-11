@@ -5,6 +5,11 @@
 
 ## Unreleased
 
+- An unreachable network drive (NFS, SMB) no longer blocks the drive bar or ties up the server: it waits at most 1.5 s and shows the last known size.
+  · Egy elérhetetlen hálózati meghajtó (NFS, SMB) nem akasztja meg a meghajtósávot és a szervert: legfeljebb 1,5 mp-et vár, és az utolsó ismert méretet mutatja.
+- Background tabs ask the server less often. · A háttérben lévő lap ritkábban kérdezi a szervert.
+- Code cleanup: duplicated code merged (dark theme CSS, file type detection, dialogs, patterns). · Kódtisztítás: összevont ismétlődő részek (sötét téma, fájltípus, ablakok, minták).
+
 ## 1.5.2 – 2026-11-11
 
 - Moving a file onto its own hardlink removes just the source name, and the target keeps the content. Copying onto it has nothing to do.

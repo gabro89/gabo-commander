@@ -306,6 +306,35 @@ SKIP_PREFIX = ('/snap/', '/var/snap/', '/var/lib/docker/', '/var/lib/containers/
                '/run/', '/sys/', '/proc/', '/dev/', '/boot/')
 
 
+_NET_USAGE, _NET_BUSY = {}, set()      # hálózati meghajtók utolsó ismert mérete; épp lekérdezés alatt állók
+_NET_LOCK = threading.Lock()
+
+
+def usage_net(mp, wait=1.5):
+    """Hálózati meghajtó mérete úgy, hogy egy nem válaszoló (pl. elérhetetlen NFS) ne akassza meg a kérést:
+    legfeljebb `wait` másodpercig vár, utána az utolsó ismert értéket adja. Meghajtónként egyszerre egy lekérdezés fut."""
+    with _NET_LOCK:
+        cached = _NET_USAGE.get(mp)
+        if mp in _NET_BUSY:
+            return cached or (0, 0)
+        _NET_BUSY.add(mp)
+    res = {}
+
+    def run():
+        try:
+            res['v'] = usage(mp)
+        finally:
+            with _NET_LOCK:
+                _NET_BUSY.discard(mp)
+                if 'v' in res:
+                    _NET_USAGE[mp] = res['v']
+
+    th = threading.Thread(target=run, daemon=True, name='statvfs ' + mp)
+    th.start()
+    th.join(wait)
+    return res.get('v') or cached or (0, 0)
+
+
 def _unescape(s):
     return re.sub(r'\\([0-7]{3})', lambda m: chr(int(m.group(1), 8)), s)
 
@@ -365,7 +394,7 @@ def drives():
             else:
                 continue
             seen.add(mp)
-            total, free = usage(mp)
+            total, free = usage_net(mp) if kind == 'net' else usage(mp)
             out.append({'path': mp, 'label': '/' if mp == '/' else os.path.basename(mp), 'kind': kind,
                         'dev': dev, 'fs': fs, 'total': total, 'free': free})
         out.sort(key=lambda d: (d['path'] != '/', d['path']))
@@ -1547,11 +1576,7 @@ def valid_name(name):
 
 def same_entry(a, b):
     """Ugyanaz a bejegyzés-e (kis/nagybetűre nem érzékeny fájlrendszeren a csak betűméretben eltérő név)."""
-    try:
-        sa, sb = os.lstat(a), os.lstat(b)
-    except OSError:
-        return False
-    return (sa.st_dev, sa.st_ino) == (sb.st_dev, sb.st_ino) and os.path.basename(a).lower() == os.path.basename(b).lower()
+    return same_inode(a, b) and os.path.basename(a).lower() == os.path.basename(b).lower()
 
 
 def multi_rename(base, pairs, lang=None):
@@ -1630,6 +1655,28 @@ VIEWABLE = ('image/', 'video/', 'audio/')
 for _ext, _t in (('.mkv', 'video/x-matroska'), ('.webm', 'video/webm'), ('.flac', 'audio/flac'),
                  ('.webp', 'image/webp'), ('.avif', 'image/avif'), ('.m4a', 'audio/mp4')):
     mimetypes.add_type(_t, _ext)
+
+
+def raw_type(path, head, download):
+    """(Content-Type, letöltés-e, extra fejlécek) egy fájl nyers küldéséhez; head: a fájl eleje.
+    Kép, videó, hang, PDF a böngészőben nyílik; a többi szövegként (a HTML is – biztonság), a bináris letöltésként."""
+    ctype = mimetypes.guess_type(path)[0] or ''
+    extra = {}
+    if download:
+        ctype = ctype or 'application/octet-stream'
+    elif ctype.startswith(VIEWABLE) or ctype == 'application/pdf':
+        if ctype == 'image/svg+xml':
+            extra['Content-Security-Policy'] = "sandbox; default-src 'none'; style-src 'unsafe-inline'"
+    elif b'\0' in head:
+        ctype, download = 'application/octet-stream', True
+    else:
+        ctype = 'text/plain; charset=utf-8'
+    return ctype, download, extra
+
+
+def what_text(lang, paths):
+    """A feladat címébe: egy elemnél a neve, többnél „N elem”."""
+    return os.path.basename(str(paths[0]).rstrip('/\\')) if len(paths) == 1 else items_text(lang, len(paths))
 
 
 class Handler(http.server.BaseHTTPRequestHandler):
@@ -1849,20 +1896,9 @@ class Handler(http.server.BaseHTTPRequestHandler):
         f = open(path, 'rb')
         try:
             size = os.fstat(f.fileno()).st_size
-            ctype = mimetypes.guess_type(path)[0] or ''
-            extra = {}
-            if download:
-                ctype = ctype or 'application/octet-stream'
-            elif ctype.startswith(VIEWABLE) or ctype == 'application/pdf':
-                if ctype == 'image/svg+xml':
-                    extra['Content-Security-Policy'] = "sandbox; default-src 'none'; style-src 'unsafe-inline'"
-            else:
-                head = f.read(8192)
-                f.seek(0)
-                if b'\0' in head:
-                    ctype, download = 'application/octet-stream', True
-                else:
-                    ctype = 'text/plain; charset=utf-8'   # a HTML-t is forrásként mutatjuk (biztonság)
+            head = f.read(8192)
+            f.seek(0)
+            ctype, download, extra = raw_type(path, head, download)
             start, end, status = 0, size - 1, 200
             rng = self.headers.get('Range')
             if rng and rng.startswith('bytes=') and size > 0:
@@ -1907,18 +1943,8 @@ class Handler(http.server.BaseHTTPRequestHandler):
         """Archívumbeli fájl küldése (nézet, gyorsnézet, letöltés); tartományt nem támogat."""
         f = arc_open(*s)
         try:
-            ctype = mimetypes.guess_type(path)[0] or ''
             head = f.read(8192)
-            extra = {}
-            if download:
-                ctype = ctype or 'application/octet-stream'
-            elif ctype.startswith(VIEWABLE) or ctype == 'application/pdf':
-                if ctype == 'image/svg+xml':
-                    extra['Content-Security-Policy'] = "sandbox; default-src 'none'; style-src 'unsafe-inline'"
-            elif b'\0' in head:
-                ctype, download = 'application/octet-stream', True
-            else:
-                ctype = 'text/plain; charset=utf-8'   # a HTML-t is forrásként mutatjuk (biztonság)
+            ctype, download, extra = raw_type(path, head, download)
             self.send_response(200)
             self.send_header('Content-Type', ctype)
             if f.size is not None:
@@ -2036,7 +2062,7 @@ class Handler(http.server.BaseHTTPRequestHandler):
             raise GCError('nothing_selected')
         dest = norm(b.get('dest'))
         policy = 'skip' if b.get('policy') == 'skip' else 'overwrite'
-        what = os.path.basename(str(archives[0])) if len(archives) == 1 else items_text(self.lang, len(archives))
+        what = what_text(self.lang, archives)
         job = Job('unpack', '%s: %s → %s' % (self.t('job_unpack'), what, dest), self.lang)
         start_job(job, unpack_job, archives, dest, bool(b.get('subdir')), policy)
         self.send_json({'id': job.id})
@@ -2052,7 +2078,7 @@ class Handler(http.server.BaseHTTPRequestHandler):
             raise GCError('nothing_selected')
         dest = norm(b.get('dest'))
         policy = 'skip' if b.get('policy') == 'skip' else 'overwrite'
-        what = names[0] if len(names) == 1 else items_text(self.lang, len(names))
+        what = what_text(self.lang, names)
         job = Job('unpack', '%s: %s → %s' % (self.t('job_extract'), what, dest), self.lang)
         start_job(job, extract_job, s[0], s[1], s[2], names, dest, policy)
         self.send_json({'id': job.id})
@@ -2143,7 +2169,7 @@ class Handler(http.server.BaseHTTPRequestHandler):
         policy = b.get('policy') or 'ask'
         if policy not in POLICIES:
             raise GCError('unknown_policy', str(policy))
-        what = os.path.basename(str(sources[0]).rstrip('/\\')) if len(sources) == 1 else items_text(self.lang, len(sources))
+        what = what_text(self.lang, sources)
         job = Job('move' if move else 'copy', '%s: %s → %s' % (self.t('job_move' if move else 'job_copy'), what, dest), self.lang)
         start_job(job, copy_job, sources, dest, move, policy)
         self.send_json({'id': job.id})
@@ -2152,7 +2178,7 @@ class Handler(http.server.BaseHTTPRequestHandler):
         paths = self.body.get('paths')
         if not isinstance(paths, list) or not paths:
             raise GCError('nothing_selected')
-        what = os.path.basename(str(paths[0]).rstrip('/\\')) if len(paths) == 1 else items_text(self.lang, len(paths))
+        what = what_text(self.lang, paths)
         job = Job('delete', '%s: %s' % (self.t('job_delete'), what), self.lang)
         start_job(job, delete_job, paths)
         self.send_json({'id': job.id})
