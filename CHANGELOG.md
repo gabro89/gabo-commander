@@ -5,6 +5,9 @@
 
 ## Unreleased
 
+- The new-version notice shows up within an hour of a release (it used to take up to 6 hours), and *Check for updates* always asks GitHub fresh.
+  · Az új verzió jelzése egy órán belül megjelenik (eddig akár 6 óra volt), a *Frissítés keresése* pedig mindig frissen kérdez.
+
 ## 1.3.0 – 2026-11-11
 
 - Multi-rename (Ctrl+M) like in Total Commander: mask, counter, date, search and replace (regex too), case, preview, undo.

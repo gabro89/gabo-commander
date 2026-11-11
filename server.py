@@ -2207,24 +2207,46 @@ def vtuple(v):
     return tuple(int(x) for x in re.findall(r'\d+', v or '')[:4])
 
 
+def _fetch_latest():
+    """A legújabb kiadott verzió a GitHubról. Elsőként a release API (nincs mögötte CDN-gyorsítótár, és
+    akkor jelez, amikor a release oldal már kész); ha az nem megy (pl. API-korlát), a main ág VERSION fájlja."""
+    hdr = {'User-Agent': 'GaboCommander/' + VERSION, 'Cache-Control': 'no-cache'}
+    errors = []
+    try:
+        rq = urllib.request.Request('https://api.github.com/repos/%s/releases/latest' % CONFIG['repo'],
+                                    headers=dict(hdr, Accept='application/vnd.github+json'))
+        with urllib.request.urlopen(rq, timeout=6) as resp:
+            latest = str(json.loads(resp.read(1 << 20).decode('utf-8')).get('tag_name') or '').lstrip('vV')
+        if re.fullmatch(r'\d+(\.\d+){0,3}', latest):
+            return latest
+        errors.append('release tag: %r' % latest)
+    except Exception as e:
+        errors.append(repr(e))
+    try:                      # a raw.githubusercontent.com 5 percig gyorsítótáraz: a paraméter ezt kerüli meg
+        rq = urllib.request.Request('https://raw.githubusercontent.com/%s/main/VERSION?t=%d' % (CONFIG['repo'], time.time()),
+                                    headers=hdr)
+        with urllib.request.urlopen(rq, timeout=6) as resp:
+            latest = resp.read(64).decode('utf-8', 'replace').strip()
+        if re.fullmatch(r'\d+(\.\d+){0,3}', latest):
+            return latest
+        errors.append('VERSION: %r' % latest)
+    except Exception as e:
+        errors.append(repr(e))
+    if CONFIG['verbose']:
+        sys.stderr.write('update check failed: %s\n' % '; '.join(errors))
+    return None
+
+
 def check_update(force=False):
-    """A GitHubon lévő VERSION fájlt olvassa (6 óránként, hiba esetén 30 percenként)."""
+    """Óránként néz rá a GitHubra (hiba esetén 15 percenként); force: a menüből kért ellenőrzés, mindig friss."""
     if not CONFIG['update_check'] or not CONFIG['repo']:
         return {'enabled': False, 'current': VERSION}
     with UPDATE_LOCK:
         age = time.time() - UPDATE['at']
-        if force and age > 10 or age > (6 * 3600 if UPDATE['latest'] else 1800):
-            url = 'https://raw.githubusercontent.com/%s/main/VERSION' % CONFIG['repo']
-            try:
-                rq = urllib.request.Request(url, headers={'User-Agent': 'GaboCommander/' + VERSION})
-                with urllib.request.urlopen(rq, timeout=6) as resp:
-                    latest = resp.read(64).decode('utf-8', 'replace').strip()
-                if not re.fullmatch(r'\d+(\.\d+){0,3}', latest):
-                    raise ValueError(latest)
+        if force and age > 5 or age > (3600 if UPDATE['latest'] else 900):
+            latest = _fetch_latest()
+            if latest:
                 UPDATE['latest'] = latest
-            except Exception as e:
-                if CONFIG['verbose']:
-                    sys.stderr.write('update check failed: %r\n' % e)
             UPDATE['at'] = time.time()
         latest = UPDATE['latest']
     return {'enabled': True, 'current': VERSION, 'latest': latest, 'repo': CONFIG['repo'],

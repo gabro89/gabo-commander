@@ -2236,7 +2236,7 @@ async function init() {
   pollJobs();
   setInterval(loadDrives, 30000);
   checkUpdate(false);
-  setInterval(() => checkUpdate(false), 6 * 3600 * 1000);
+  setInterval(() => checkUpdate(false), 3600 * 1000);
 }
 
 run(init);
