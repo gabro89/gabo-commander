@@ -5,6 +5,8 @@
 
 ## Unreleased
 
+## 1.5.4 – 2026-11-12
+
 - Left click only moves the cursor and keeps the selection, like in Total Commander (select with the right button, Ctrl+click,
   Shift+click). The old behavior: *View → Left click selects (Windows style)*.
   · A bal klikk csak a kurzort viszi, a kijelölés megmarad, mint a Total Commanderben (jelölés: jobb gomb, Ctrl+klikk,
