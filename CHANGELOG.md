@@ -5,6 +5,8 @@
 
 ## Unreleased
 
+## 1.5.7 – 2026-11-12
+
 - New folder (F7): the name under the cursor is offered (selected, so you can just type over it; for a file without
   the extension). If an item with that name is already here, the dialog says so and stays open.
   · Új mappa (F7): a kurzor alatti elem nevét ajánlja fel (kijelölve, így egyszerűen átírható; fájlnál kiterjesztés nélkül).
