@@ -5,6 +5,11 @@
 
 ## Unreleased
 
+- New folder (F7): the name under the cursor is offered (selected, so you can just type over it; for a file without
+  the extension). If an item with that name is already here, the dialog says so and stays open.
+  · Új mappa (F7): a kurzor alatti elem nevét ajánlja fel (kijelölve, így egyszerűen átírható; fájlnál kiterjesztés nélkül).
+  Ha ilyen nevű elem már van, az ablak szól, és nyitva marad.
+
 ## 1.5.6 – 2026-11-12
 
 - Installer demo: `bash install.sh --demo` walks through the wizard without changing anything (also in Git Bash on Windows).

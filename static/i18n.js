@@ -45,6 +45,7 @@ const I18N = {
     del_many: 'Biztosan <b>véglegesen</b> törlöd ezt a(z) {0} elemet? (Nincs lomtár!)',
 
     mkdir_title: 'Új mappa (F7)', create_btn: 'Létrehoz', mkdir_label: 'Új mappa neve (alkönyvtárak is: a/b/c):',
+    mkdir_exists: 'Ilyen nevű elem már van itt – írj be másik nevet.',
     newfile_title: 'Új fájl (Shift+F4)', newfile_btn: 'Létrehoz és szerkeszt', newfile_label: 'Új fájl neve:', newfile_default: 'uj.txt',
     rename_title: 'Átnevezés (F2 / Shift+F6)', rename_btn: 'Átnevez', rename_label: 'Új név:',
     download_nofile: 'Válassz ki fájlt (mappát még nem lehet letölteni).',
@@ -235,6 +236,7 @@ const I18N = {
     del_many: 'Delete these {0} items <b>permanently</b>? (There is no trash!)',
 
     mkdir_title: 'New folder (F7)', create_btn: 'Create', mkdir_label: 'New folder name (subfolders too: a/b/c):',
+    mkdir_exists: 'An item with this name is already here – type another name.',
     newfile_title: 'New file (Shift+F4)', newfile_btn: 'Create and edit', newfile_label: 'New file name:', newfile_default: 'new.txt',
     rename_title: 'Rename (F2 / Shift+F6)', rename_btn: 'Rename', rename_label: 'New name:',
     download_nofile: 'Select a file (folders cannot be downloaded yet).',

@@ -957,7 +957,23 @@ async function cmdDelete() {
 async function cmdMkdir() {
   const p = active;
   ro(p);
-  const r = await modal({ title: t('mkdir_title'), ok: t('create_btn'), body: `<label>${t('mkdir_label')}<input name="name"></label>` });
+  /* mint a TC-ben: a kurzor alatti elem neve az alapérték (fájlnál kiterjesztés nélkül), kijelölve, így felülírható */
+  const cur = p.view[p.cursor];
+  const def = !cur || cur.up ? '' : cur.d ? cur.n : (cur.base || cur.n);
+  const key = INFO.win ? s => s.toLowerCase() : s => s;
+  const names = new Set(p.entries.map(e => key(e.n)));
+  const taken = v => { v = v.trim(); return !!v && !/[\\/]/.test(v) && names.has(key(v)); };
+  const r = await modal({
+    title: t('mkdir_title'), ok: t('create_btn'),
+    body: `<label>${t('mkdir_label')}<input name="name" value="${esc(def)}"></label><p class="err" hidden>${esc(t('mkdir_exists'))}</p>`,
+    onOpen(f) {   // létező névnél figyelmeztet, és a Létrehoz gomb nem kattintható
+      const inp = f.elements.name, msg = f.querySelector('.err'), btn = f.querySelector('.dlg-btns .primary');
+      const upd = () => { const bad = taken(inp.value); msg.hidden = !bad; btn.disabled = bad; };
+      inp.addEventListener('input', upd);
+      upd();
+    },
+    onKey: (ev, close, f) => ev.key === 'Enter' && taken(f.elements.name.value) && (ev.preventDefault(), true),
+  });
   if (!r || !r.name.trim()) return;
   const name = r.name.trim();
   await POST('/api/mkdir', { path: resolvePath(p.path, name), parents: true });
