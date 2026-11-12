@@ -28,8 +28,10 @@ let DRIVES = [];
 const panels = {};
 let active = null;
 let showHidden = false;
-let lynx = false;
-let leftSel = false;                /* bal klikk kijelöl (Windows-stílus); alapból TC-stílus: csak a kurzor mozog */                   /* Lynx-navigáció: → belép a mappába, ← a szülőbe (Nézet menü) */
+let lynx = false;                   /* Lynx-navigáció: → belép a mappába, ← a szülőbe (Nézet menü) */
+let leftSel = false;                /* bal klikk kijelöl (Windows-stílus); alapból TC-stílus: csak a kurzor mozog */
+const OPT_COLS = ['m', 'b', 'p', 'o'];   /* a Nézet menüben elrejthető oszlopok */
+let hideCols = new Set();
 let clip = null;
 let dragData = null;
 const modalStack = [];
@@ -1634,6 +1636,17 @@ function toggleLeftSel() {
   toast(t(leftSel ? 'leftsel_on' : 'leftsel_off'));
 }
 
+/* oszlopok elrejtése: a <html> hide-X osztálya, a CSS rejti el a fejlécben és a sorokban is */
+function applyCols() {
+  for (const k of OPT_COLS) document.documentElement.classList.toggle('hide-' + k, hideCols.has(k));
+}
+
+function toggleCol(k) {
+  if (!hideCols.delete(k)) hideCols.add(k);
+  store.set('hidecols', [...hideCols]);
+  applyCols();
+}
+
 function toggleHidden() {
   showHidden = !showHidden;
   store.set('hidden', showHidden);
@@ -1743,6 +1756,7 @@ const CMD = {
   root: () => active.nav('root'), home: () => active.nav('home'), up: () => active.nav('up'),
   drvL: () => driveMenu(panels.L), drvR: () => driveMenu(panels.R),
   sort_n: () => active.setSort('n'), sort_e: () => active.setSort('e'), sort_s: () => active.setSort('s'), sort_m: () => active.setSort('m'),
+  col_m: () => toggleCol('m'), col_b: () => toggleCol('b'), col_p: () => toggleCol('p'), col_o: () => toggleCol('o'),
   about: cmdAbout, update: () => cmdUpdate(true),
   filter: () => active.openFilter(), fav: () => favMenu(active), favadd: () => favAdd(active), qview: qvToggle,
   pack: cmdPack, unpack: cmdUnpack,
@@ -1882,6 +1896,7 @@ const MENUS = [
     ['mi_sort_e', 'sort_e', '', () => active && active.sort.key === 'e'],
     ['mi_sort_s', 'sort_s', '', () => active && active.sort.key === 's'],
     ['mi_sort_m', 'sort_m', '', () => active && active.sort.key === 'm'], '-',
+    ...OPT_COLS.map(k => ['mi_col_' + k, 'col_' + k, '', () => !hideCols.has(k)]), '-',
     ['mi_theme_auto', 'theme_auto', '', () => document.documentElement.dataset.theme === 'auto'],
     ['mi_theme_light', 'theme_light', '', () => document.documentElement.dataset.theme === 'light'],
     ['mi_theme_dark', 'theme_dark', '', () => document.documentElement.dataset.theme === 'dark'], '-',
@@ -2349,6 +2364,9 @@ async function init() {
   showHidden = store.get('hidden', false);
   lynx = store.get('lynx', false);
   leftSel = store.get('leftsel', false);
+  const hc = store.get('hidecols', []);
+  hideCols = new Set(Array.isArray(hc) ? hc.filter(k => OPT_COLS.includes(k)) : []);
+  applyCols();
   $('[data-cmd=hidden]').classList.toggle('on', showHidden);
   panels.L = new Panel('L', $('#left'));
   panels.R = new Panel('R', $('#right'));

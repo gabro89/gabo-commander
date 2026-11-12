@@ -115,6 +115,7 @@ const I18N = {
     mi_drvL: 'Meghajtó – bal panel…', mi_drvR: 'Meghajtó – jobb panel…',
     mi_hidden: 'Rejtett fájlok', mi_sort_n: 'Rendezés név szerint', mi_sort_e: 'Rendezés kiterjesztés szerint',
     mi_sort_s: 'Rendezés méret szerint', mi_sort_m: 'Rendezés dátum szerint',
+    mi_col_m: 'Oszlop: Módosítva', mi_col_b: 'Oszlop: Létrehozva', mi_col_p: 'Oszlop: Jogok', mi_col_o: 'Oszlop: Tulajdonos',
     mi_keys: 'Billentyűparancsok', mi_about: 'Névjegy', mi_update: 'Frissítés keresése…',
     lang_t: 'Nyelv / Language',
 
@@ -302,6 +303,7 @@ const I18N = {
     mi_drvL: 'Drive – left panel…', mi_drvR: 'Drive – right panel…',
     mi_hidden: 'Hidden files', mi_sort_n: 'Sort by name', mi_sort_e: 'Sort by extension',
     mi_sort_s: 'Sort by size', mi_sort_m: 'Sort by date',
+    mi_col_m: 'Column: Modified', mi_col_b: 'Column: Created', mi_col_p: 'Column: Perms', mi_col_o: 'Column: Owner',
     mi_keys: 'Keyboard shortcuts', mi_about: 'About', mi_update: 'Check for updates…',
     lang_t: 'Language / Nyelv',
 

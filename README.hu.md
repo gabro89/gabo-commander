@@ -104,6 +104,7 @@ Kérdések nélküli telepítés: `sudo bash install.sh --yes --lang hu --user g
 - **Kedvenc mappák** (Ctrl+D vagy a ★ gomb): a szerveren tárolódnak, így minden eszközödön ugyanazok.
 - **Gyorsnézet** (Ctrl+Q): a másik panelen előnézet a kurzor alatti fájlról: kép, videó, hang, szöveg, PDF.
 - **Világos és sötét téma**: *Nézet → Téma*, automatikus módban a rendszer beállítását követi.
+- **Oszlopok**: a *Módosítva*, *Létrehozva*, *Jogok* és *Tulajdonos* oszlop a *Nézet* menüben ki- és bekapcsolható (a beállítás megmarad).
 - **Telefon és tablet**: egyszerre egy panel A/B fülekkel, nagyobb sorok. Koppintás: kurzor,
   újabb koppintás: megnyitás, hosszan nyomva: kijelölés.
 - A bejelentkezés megmarad újraindítás és frissítés után is, a sok hibás jelszót pedig 15 percre letiltja.

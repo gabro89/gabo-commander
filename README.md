@@ -103,6 +103,7 @@ For an unattended install: `sudo bash install.sh --yes --lang en --user gabor --
 - **Favorite folders** (Ctrl+D, or the ★ button): stored on the server, so they are the same on every device.
 - **Quick view** (Ctrl+Q): the other panel previews the file under the cursor: image, video, audio, text, PDF.
 - **Light and dark theme**: *View → Theme*. Automatic mode follows the system setting.
+- **Columns**: the *Modified*, *Created*, *Perms* and *Owner* columns can be shown or hidden in the *View* menu (the setting is remembered).
 - **Phone and tablet**: one panel at a time with A/B tabs, bigger rows. Tap a row to put the cursor on it,
   tap it again to open it, long-press to select.
 - Sign-ins survive restarts and updates, and repeated wrong passwords are blocked for 15 minutes.

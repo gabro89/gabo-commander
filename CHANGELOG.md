@@ -5,6 +5,9 @@
 
 ## Unreleased
 
+- New: the Modified, Created, Perms and Owner columns can be shown or hidden in the *View* menu.
+  · Új: a Módosítva, Létrehozva, Jogok és Tulajdonos oszlop a *Nézet* menüben ki- és bekapcsolható.
+
 ## 1.5.4 – 2026-11-12
 
 - Left click only moves the cursor and keeps the selection, like in Total Commander (select with the right button, Ctrl+click,

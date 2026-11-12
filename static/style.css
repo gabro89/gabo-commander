@@ -235,6 +235,9 @@ pre.cmd { background: #1e1e1e; color: #e6e6e6; padding: 6px 10px; border-radius:
 .filter-input:focus { outline: 2px solid var(--cursor); outline-offset: -1px; }
 .f-count { font-size: 12px; color: var(--muted); white-space: nowrap; font-variant-numeric: tabular-nums; }
 
+/* a Nézet menüben kikapcsolt oszlopok */
+.hide-m .c-m, .hide-b .c-b, .hide-p .c-p, .hide-o .c-o { display: none; }
+
 /* keskeny panelnél kevesebb oszlop */
 @container (max-width: 780px) { .c-b, .c-o { display: none; } }
 @container (max-width: 560px) { .c-p, .c-e { display: none; } }
