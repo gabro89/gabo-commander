@@ -11,8 +11,11 @@
 #     sudo bash install.sh --yes --lang en --user gabor --port 28090
 #
 #   Options: --yes  --lang hu|en  --user NAME  --port N  --host ADDR  --no-update-check
+#            --auto-update / --no-auto-update   (install new versions by itself every night, 4–5 am)
 #            --apply      (rewrite service from the saved settings, no questions – used by "gabo-commander update")
 #            --password   (only set / change / remove the password)
+#            --demo       (walk through the wizard without changing anything; no root or systemd needed,
+#                          also runs in Git Bash on Windows · végigmegy a kérdéseken, de semmit nem módosít)
 #
 # The program lives in /opt/gabo-commander as a git clone, so "sudo gabo-commander update" can pull new versions.
 # A program a /opt/gabo-commander mappába kerül git-klónként, így a "sudo gabo-commander update" frissíteni tudja.
@@ -29,6 +32,8 @@ UNIT=/etc/systemd/system/gabo-commander.service
 UPD_UNIT=/etc/systemd/system/gabo-commander-update.service
 UPD_PATH=/etc/systemd/system/gabo-commander-update.path
 UPD_LOG=/var/log/gabo-commander-update.log
+AUTO_UNIT=/etc/systemd/system/gabo-commander-autoupdate.service
+AUTO_TIMER=/etc/systemd/system/gabo-commander-autoupdate.timer
 BIN=/usr/local/bin/gabo-commander
 SERVICE=gabo-commander
 DEFAULT_PORT=28090
@@ -36,7 +41,8 @@ DEFAULT_PORT=28090
 ORIG_ARGS=("$@")
 MODE=wizard
 ASSUME_YES=0
-OPT_USER="" OPT_PORT="" OPT_HOST="" OPT_LANG="" OPT_UPD=""
+DEMO=0
+OPT_USER="" OPT_PORT="" OPT_HOST="" OPT_LANG="" OPT_UPD="" OPT_AUTO=""
 while [ $# -gt 0 ]; do
   case "$1" in
     -y|--yes) ASSUME_YES=1 ;;
@@ -47,11 +53,17 @@ while [ $# -gt 0 ]; do
     --host) OPT_HOST="${2:-}"; shift ;;
     --lang) OPT_LANG="${2:-}"; shift ;;
     --no-update-check) OPT_UPD=0 ;;
-    -h|--help) sed -n '2,19p' "${BASH_SOURCE[0]:-/dev/null}" 2>/dev/null | sed 's/^# \{0,1\}//'; exit 0 ;;
+    --demo) DEMO=1 ;;
+    --auto-update) OPT_AUTO=1 ;;
+    --no-auto-update) OPT_AUTO=0 ;;
+    -h|--help) sed -n '2,22p' "${BASH_SOURCE[0]:-/dev/null}" 2>/dev/null | sed 's/^# \{0,1\}//'; exit 0 ;;
     *) echo "Unknown option / ismeretlen kapcsoló: $1" >&2; exit 2 ;;
   esac
   shift
 done
+if [ "$DEMO" = 1 ] && [ "$MODE" != wizard ]; then
+  echo "--demo only works with the wizard (not with --apply / --password) · a --demo csak a varázslóval megy" >&2; exit 2
+fi
 
 # ------------------------------------------------------------------ megjelenítés / output
 if [ -t 1 ]; then
@@ -75,6 +87,32 @@ ok()    { printf '%s✓%s %s\n' "$G" "$N" "$(m "$1" "$2")"; }
 warn()  { printf '%s!%s %s\n' "$Y" "$N" "$(m "$1" "$2")" >&2; }
 die()   { printf '%s✗ %s%s\n' "$R" "$(m "$1" "$2")" "$N" >&2; exit 1; }
 title() { printf '\n%s%s%s\n' "$B" "$(m "$1" "$2")" "$N"; }
+
+# A látható szélesség betűkben: a színkódok nélkül, az UTF-8 folytatóbájtok nélkül (így az ékezet sem csúsztat)
+vlen() { local n; n=$(printf '%s' "$1" | sed $'s/\e\\[[0-9;]*m//g' | LC_ALL=C tr -d '\200-\277' | wc -c); echo $((n)); }
+pad()  { local n; n=$(vlen "$1"); printf '%s%*s' "$1" $(($2 > n ? $2 - n : 0)) ''; }
+rule() { [ "$1" -gt 0 ] && printf '%*s' "$1" '' | sed 's/ /─/g'; return 0; }
+# box SZÍN "cím" "sor" ...   – keretes doboz; üres sor is lehet, a cím el is maradhat
+box() {
+  local col=$1 t=$2 w=30 n l; shift 2
+  n=$(vlen "$t"); [ $((n + 2)) -le $w ] || w=$((n + 2))
+  for l in "$@"; do n=$(vlen "$l"); [ "$n" -le "$w" ] || w=$n; done
+  if [ -n "$t" ]; then
+    printf '%s╭─ %s%s%s %s╮%s\n' "$col" "$B" "$t" "$N$col" "$(rule $((w - $(vlen "$t") - 1)))" "$N"
+  else
+    printf '%s╭%s╮%s\n' "$col" "$(rule $((w + 2)))" "$N"
+  fi
+  for l in "$@"; do printf '%s│%s %s %s│%s\n' "$col" "$N" "$(pad "$l" "$w")" "$col" "$N"; done
+  printf '%s╰%s╯%s\n' "$col" "$(rule $((w + 2)))" "$N"
+}
+row() { printf '%s %s' "$(pad "$1" 22)" "$2"; }   # összegzés sora: kulcs + érték
+STEPS=5
+step() {   # step N "cím" "title"   → ●●○○○  2/5  Port
+  local d="" k
+  for ((k = 1; k <= STEPS; k++)); do if [ "$k" -le "$1" ]; then d+="●"; else d+="○"; fi; done
+  printf '\n%s%s%s  %s%d/%d  %s%s\n' "$C" "$d" "$N" "$B" "$1" "$STEPS" "$(m "$2" "$3")" "$N"
+}
+demo()  { printf '%s[demo]%s %s\n' "$Y" "$N" "$(m "$1" "$2")"; }   # mit csinálna a valódi telepítő
 
 HAVE_TTY=0
 if [ "$ASSUME_YES" = 0 ] && { : </dev/tty; } 2>/dev/null; then HAVE_TTY=1; fi
@@ -131,13 +169,15 @@ if [ -n "$SELF" ] && [ -f "$SELF" ] && [ -f "$(dirname "$SELF")/server.py" ]; th
   SRC="$(cd "$(dirname "$SELF")" && pwd -P)"
 fi
 
-if [ "$(id -u)" -ne 0 ]; then
+if [ "$DEMO" = 1 ]; then
+  :   # demó: nem kell root és systemd, mert semmit nem módosítunk
+elif [ "$(id -u)" -ne 0 ]; then
   if [ -n "$SRC" ] && command -v sudo >/dev/null 2>&1; then
     exec sudo bash "$SRC/install.sh" ${ORIG_ARGS[@]+"${ORIG_ARGS[@]}"}
   fi
   die "Rendszergazdaként kell futtatni:  ... | sudo bash" "Must be run as root:  ... | sudo bash"
 fi
-if ! command -v systemctl >/dev/null 2>&1 || [ ! -d /run/systemd/system ]; then
+if [ "$DEMO" = 0 ] && { ! command -v systemctl >/dev/null 2>&1 || [ ! -d /run/systemd/system ]; }; then
   die "Ehhez systemd kell (Ubuntu, Debian, Fedora, Arch… mind ilyen). Kézi indítás: python3 server.py" \
       "systemd is required (Ubuntu, Debian, Fedora, Arch… all have it). To run manually: python3 server.py"
 fi
@@ -146,7 +186,7 @@ fi
 GITCFG="$(mktemp)"
 printf '[safe]\n\tdirectory = *\n' >"$GITCFG"
 export GIT_CONFIG_GLOBAL="$GITCFG"
-trap 'rm -f "$GITCFG"; stty echo </dev/tty 2>/dev/null || true' EXIT
+trap 'rm -f "$GITCFG"; { stty echo </dev/tty; } 2>/dev/null || true' EXIT
 
 # ------------------------------------------------------------------ meglévő beállítások / existing settings
 env_get() {   # a mentett érték idézőjelek nélkül
@@ -160,6 +200,7 @@ CUR_PORT="$(env_get GC_PORT)"
 CUR_HOST="$(env_get GC_HOST)"
 CUR_LANG="$(env_get GC_LANG)"
 CUR_UPD="$(env_get GC_UPDATE_CHECK)"
+CUR_AUTO="$(env_get GC_AUTO_UPDATE)"
 PW_LINES=""
 [ -f "$ENV_FILE" ] && PW_LINES="$(grep -E '^GC_PASSWORD(_HASH)?=' "$ENV_FILE" || true)"
 HAS_PW=0; [ -n "$PW_LINES" ] && HAS_PW=1
@@ -171,14 +212,19 @@ fi
 
 # ------------------------------------------------------------------ nyelv / language
 if [ "$MODE" = wizard ]; then
-  printf '\n%s Gabo Commander %s\n' "$B" "$N"
+  hv="$(cat "${SRC:-$DEST}/VERSION" 2>/dev/null || true)"
+  hdr=("${B}Gabo Commander${N}${hv:+  ${D}v$hv${N}}" "Telepítő varázsló · Setup wizard")
+  [ "$DEMO" = 0 ] || hdr+=("" "${Y}${B}DEMO${N}${Y} – semmi nem változik · nothing is changed${N}")
+  echo
+  box "$C" "" "${hdr[@]}"
+  echo
   if [ -z "$OPT_LANG" ] && [ "$ASSUME_YES" = 0 ]; then
     printf '%sNyelv / Language%s\n' "$B" "$N" >/dev/tty
     choose li "$([ "${CUR_LANG:-$L}" = hu ] && echo 1 || echo 2)" "Magyar" "English"
     [ "$li" = 1 ] && L=hu || L=en
   fi
-  say "Telepítő varázsló – Enterrel elfogadod a [zárójelben] lévő alapértéket." \
-      "Setup wizard – press Enter to accept the default shown in [brackets]."
+  say "Enterrel elfogadod a [zárójelben] lévő alapértéket." \
+      "Press Enter to accept the default shown in [brackets]."
 fi
 
 # ------------------------------------------------------------------ csomagok / packages
@@ -194,16 +240,26 @@ pkg_install() {
   fi
 }
 need=()
+if [ "$DEMO" = 1 ]; then
+  # demó: nem telepítünk csomagot; Windowson a "python3" lehet a Microsoft Store álparancsa
+  PYTHON=""
+  for c in python3 python py; do
+    if command -v "$c" >/dev/null 2>&1 && "$c" -c 'import sys' >/dev/null 2>&1; then PYTHON="$(command -v "$c")"; break; fi
+  done
+else
 command -v python3 >/dev/null 2>&1 || need+=(python3)
 command -v git >/dev/null 2>&1 || need+=(git)
+fi
 if [ ${#need[@]} -gt 0 ]; then
   info "Hiányzó csomagok telepítése: ${need[*]}" "Installing missing packages: ${need[*]}"
   pkg_install "${need[@]}" || die "Nem sikerült telepíteni: ${need[*]} – telepítsd kézzel, majd futtasd újra." \
                                   "Could not install: ${need[*]} – install them manually, then run this again."
 fi
+if [ "$DEMO" = 0 ]; then
 python3 -c 'import sys; sys.exit(sys.version_info < (3, 8))' ||
   die "Python 3.8 vagy újabb kell (most: $(python3 -V 2>&1))." "Python 3.8 or newer is required (found: $(python3 -V 2>&1))."
 PYTHON="$(command -v python3)"
+fi
 
 # ------------------------------------------------------------------ program a /opt-ba (git-klón) / program into /opt (git clone)
 prepare_source() {
@@ -239,11 +295,15 @@ prepare_source() {
   fi
   mv "$tmp" "$DEST"
 }
-if [ "$MODE" = wizard ]; then
+if [ "$DEMO" = 1 ]; then
+  VERSION="$(cat "${SRC:-$DEST}/VERSION" 2>/dev/null || echo '?')"
+elif [ "$MODE" = wizard ]; then
   prepare_source
 fi
-[ -f "$DEST/server.py" ] || die "Nem található: $DEST/server.py" "Not found: $DEST/server.py"
-VERSION="$(cat "$DEST/VERSION" 2>/dev/null || echo '?')"
+if [ "$DEMO" = 0 ]; then
+  [ -f "$DEST/server.py" ] || die "Nem található: $DEST/server.py" "Not found: $DEST/server.py"
+  VERSION="$(cat "$DEST/VERSION" 2>/dev/null || echo '?')"
+fi
 
 ORIGIN_URL="$(git -C "$DEST" remote get-url origin 2>/dev/null || true)"
 REPO_SLUG="$(printf '%s' "$ORIGIN_URL" | sed -nE 's#^(https?://|ssh://git@|git@)github\.com[:/]([^/]+/[^/]+)$#\2#p' | sed 's/\.git$//')"
@@ -251,6 +311,7 @@ REPO_SLUG="$(printf '%s' "$ORIGIN_URL" | sed -nE 's#^(https?://|ssh://git@|git@)
 # ------------------------------------------------------------------ segédek / helpers
 port_in_use() {   # 0 = más program használja a portot
   local p=$1
+  [ -n "$PYTHON" ] || return 1   # demó Python nélkül: nem tudjuk megnézni, szabadnak vesszük
   "$PYTHON" - "$p" <<'PY' && return 1
 import socket, sys
 s = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
@@ -290,6 +351,7 @@ ask_password() {   # beállítja: PW_LINES
     [ "$pw" = "$pw2" ] && break
     warn "A két jelszó nem egyezik, próbáld újra." "The passwords do not match, try again."
   done
+  if [ "$DEMO" = 1 ]; then PW_LINES="GC_PASSWORD_HASH=(demo)"; return 0; fi
   PW_LINES="GC_PASSWORD_HASH=$(printf '%s\n' "$pw" | make_hash)"
 }
 
@@ -301,10 +363,11 @@ write_env() {
     echo "GC_HOST=$NEW_HOST"
     echo "GC_PORT=$NEW_PORT"
     echo "GC_UPDATE_CHECK=$NEW_UPD"
+    echo "GC_AUTO_UPDATE=$NEW_AUTO"
     echo "GC_REPO=$REPO_SLUG"
     [ -z "$PW_LINES" ] || printf '%s\n' "$PW_LINES"
     if [ -f "$ENV_FILE" ]; then   # a kézzel hozzáadott egyéb sorok maradnak
-      grep -vE '^(GC_LANG|GC_HOST|GC_PORT|GC_UPDATE_CHECK|GC_REPO|GC_PASSWORD|GC_PASSWORD_HASH)=|^# Gabo Commander' "$ENV_FILE" || true
+      grep -vE '^(GC_LANG|GC_HOST|GC_PORT|GC_UPDATE_CHECK|GC_AUTO_UPDATE|GC_REPO|GC_PASSWORD|GC_PASSWORD_HASH)=|^# Gabo Commander' "$ENV_FILE" || true
     fi
   } >"$tmp"
   install -m 600 -o root -g root "$tmp" "$ENV_FILE"
@@ -339,6 +402,41 @@ exec bash $DEST/gabo-commander.sh "\$@"
 EOF
   chmod 755 "$BIN"
   write_updater
+  write_autoupdate
+}
+
+# Automatikus frissítés: éjjel 4 és 5 között (véletlen időpontban, hogy ne egyszerre kérdezzen minden szerver)
+# lefut a "gabo-commander update"; ha nincs új verzió, nem csinál semmit. Kimaradt futás (gép ki volt kapcsolva)
+# a következő indításkor pótlódik. Napló: journalctl -u gabo-commander-autoupdate
+write_autoupdate() {
+  if [ "$NEW_AUTO" != 1 ]; then
+    systemctl disable --now gabo-commander-autoupdate.timer >/dev/null 2>&1 || true
+    rm -f "$AUTO_UNIT" "$AUTO_TIMER"
+    return 0
+  fi
+  cat >"$AUTO_UNIT" <<EOF
+[Unit]
+Description=Gabo Commander automatic update
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=oneshot
+Environment=HOME=/root
+ExecStart=/bin/bash $DEST/gabo-commander.sh update
+EOF
+  cat >"$AUTO_TIMER" <<EOF
+[Unit]
+Description=Gabo Commander – nightly automatic update
+
+[Timer]
+OnCalendar=*-*-* 04:00:00
+RandomizedDelaySec=1h
+Persistent=true
+
+[Install]
+WantedBy=timers.target
+EOF
 }
 
 # Frissítés a felületről: az app (a saját jogaival) csak egy kérésfájlt tesz a StateDirectory-ba;
@@ -379,6 +477,7 @@ start_service() {
   systemctl enable "$SERVICE" >/dev/null 2>&1
   systemctl restart "$SERVICE"
   if [ -f "$UPD_PATH" ]; then systemctl enable --now gabo-commander-update.path >/dev/null 2>&1 || true; fi
+  if [ -f "$AUTO_TIMER" ]; then systemctl enable --now gabo-commander-autoupdate.timer >/dev/null 2>&1 || true; fi
   local h=127.0.0.1 i
   case "$NEW_HOST" in 0.0.0.0|127.0.0.1|::|"") ;; *) h="$NEW_HOST" ;; esac
   for i in $(seq 1 20); do
@@ -392,20 +491,16 @@ start_service() {
   exit 1
 }
 
-show_urls() {
-  local ips ip
+url_list() {   # a megnyitható címek, soronként egy
+  local ips ip any=0
   if [ "$NEW_HOST" = 0.0.0.0 ] || [ "$NEW_HOST" = "::" ]; then
     ips="$(hostname -I 2>/dev/null || true)"
     for ip in $ips; do
-      case "$ip" in *:*) ;; *) printf '     %shttp://%s:%s/%s\n' "$B$G" "$ip" "$NEW_PORT" "$N" ;; esac
+      case "$ip" in *:*) ;; *) echo "http://$ip:$NEW_PORT/"; any=1 ;; esac
     done
-    [ -n "$ips" ] || printf '     %shttp://%s:%s/%s\n' "$B$G" "$(hostname)" "$NEW_PORT" "$N"
+    [ "$any" = 1 ] || echo "http://$(hostname):$NEW_PORT/"
   else
-    printf '     %shttp://%s:%s/%s\n' "$B$G" "$NEW_HOST" "$NEW_PORT" "$N"
-    if [ "$NEW_HOST" = 127.0.0.1 ]; then
-      say "     Távolról SSH-alagúttal:  ssh -L $NEW_PORT:127.0.0.1:$NEW_PORT $(hostname)  → http://localhost:$NEW_PORT/" \
-          "     Remotely via SSH tunnel: ssh -L $NEW_PORT:127.0.0.1:$NEW_PORT $(hostname)  → http://localhost:$NEW_PORT/"
-    fi
+    echo "http://$NEW_HOST:$NEW_PORT/"
   fi
 }
 
@@ -413,7 +508,7 @@ show_urls() {
 if [ "$MODE" = password ]; then
   [ "$INSTALLED" = 1 ] || die "Még nincs telepítve." "Not installed yet."
   NEW_USER="$CUR_USER"; NEW_PORT="${CUR_PORT:-$DEFAULT_PORT}"; NEW_HOST="${CUR_HOST:-0.0.0.0}"
-  NEW_LANG="${CUR_LANG:-$L}"; NEW_UPD="${CUR_UPD:-1}"
+  NEW_LANG="${CUR_LANG:-$L}"; NEW_UPD="${CUR_UPD:-1}"; NEW_AUTO="${CUR_AUTO:-0}"
   ask_password
   write_env
   systemctl restart "$SERVICE"
@@ -425,6 +520,7 @@ fi
 NEW_LANG="${OPT_LANG:-${CUR_LANG:-$L}}"
 [ "$MODE" = wizard ] && [ -z "$OPT_LANG" ] && NEW_LANG="$L"
 DEF_USER="${OPT_USER:-${CUR_USER:-${SUDO_USER:-}}}"
+[ "$DEMO" = 0 ] || DEF_USER="${DEF_USER:-$(id -un 2>/dev/null || echo "${USER:-user}")}"
 if [ -z "$DEF_USER" ] || [ "$DEF_USER" = root ] && [ -z "$OPT_USER" ] && [ -z "$CUR_USER" ]; then
   DEF_USER="$(getent passwd 1000 | cut -d: -f1 || true)"
   [ -n "$DEF_USER" ] || DEF_USER=root
@@ -433,10 +529,11 @@ NEW_USER="$DEF_USER"
 NEW_PORT="${OPT_PORT:-${CUR_PORT:-$DEFAULT_PORT}}"
 NEW_HOST="${OPT_HOST:-${CUR_HOST:-0.0.0.0}}"
 NEW_UPD="${OPT_UPD:-${CUR_UPD:-1}}"
+NEW_AUTO="${OPT_AUTO:-${CUR_AUTO:-0}}"
 
 if [ "$MODE" = wizard ]; then
   # 1. felhasználó
-  title "1/5  Melyik felhasználó nevében fusson?" "1/5  Which user should it run as?"
+  step 1 "Melyik felhasználó nevében fusson?" "Which user should it run as?"
   say "A program annak a felhasználónak a jogaival lát és módosít fájlokat." \
       "The program sees and changes files with this user's permissions."
   if [ "$ASSUME_YES" = 0 ] && [ -z "$OPT_USER" ]; then
@@ -459,7 +556,7 @@ if [ "$MODE" = wizard ]; then
   id "$NEW_USER" >/dev/null 2>&1 || die "Nincs ilyen felhasználó: $NEW_USER" "No such user: $NEW_USER"
 
   # 2. port
-  title "2/5  Port" "2/5  Port"
+  step 2 "Port" "Port"
   say "Egyedi portot javaslok, hogy ne ütközzön más programmal ($DEFAULT_PORT)." \
       "A distinctive port is suggested so it won't clash with other programs ($DEFAULT_PORT)."
   if [ -z "$OPT_PORT" ] && port_in_use "$NEW_PORT"; then
@@ -482,7 +579,7 @@ if [ "$MODE" = wizard ]; then
   done
 
   # 3. elérés
-  title "3/5  Honnan lehessen elérni?" "3/5  Where should it be reachable from?"
+  step 3 "Honnan lehessen elérni?" "Where should it be reachable from?"
   hc=1
   case "$NEW_HOST" in 0.0.0.0) hc=1 ;; 127.0.0.1) hc=2 ;; *) hc=3 ;; esac
   if [ "$ASSUME_YES" = 0 ] && [ -z "$OPT_HOST" ]; then
@@ -498,29 +595,38 @@ if [ "$MODE" = wizard ]; then
   fi
 
   # 4. jelszó
-  title "4/5  Jelszó" "4/5  Password"
+  step 4 "Jelszó" "Password"
   if [ "$ASSUME_YES" = 0 ]; then ask_password; fi
 
   # 5. frissítés-ellenőrzés
-  title "5/5  Frissítések" "5/5  Updates"
-  say "A felület óránként megnézi a GitHubon, van-e új verzió, és jelzi (csak a verziószámot tölti le)." \
-      "The UI checks GitHub every hour for a new version and shows a notice (it only downloads the version number)."
+  step 5 "Frissítések" "Updates"
+  say "Naponta egyszer megnézi a GitHubon, van-e új verzió, és jelzi (csak a verziószámot tölti le)." \
+      "It checks GitHub once a day for a new version and shows a notice (it only downloads the version number)."
   say "Ilyenkor a felületről egy kattintással frissíthető is (ugyanaz, mint a sudo gabo-commander update)." \
       "It can then also be updated from the UI with one click (same as sudo gabo-commander update)."
   if [ -z "$OPT_UPD" ]; then
     if yesno "Jelezze, ha van új verzió, és lehessen a felületről frissíteni?" "Notify about new versions and allow updating from the UI?" "$([ "$NEW_UPD" = 0 ] && echo n || echo y)"; then NEW_UPD=1; else NEW_UPD=0; fi
   fi
+  echo
+  say "Automatikus frissítésnél éjjel 4 és 5 óra között magától felteszi az új verziót, és újraindul." \
+      "With automatic updates it installs new versions by itself between 4 and 5 am, then restarts."
+  if [ -z "$OPT_AUTO" ]; then
+    if yesno "Frissítsen magától éjszakánként?" "Update automatically every night?" "$([ "$NEW_AUTO" = 1 ] && echo y || echo n)"; then NEW_AUTO=1; else NEW_AUTO=0; fi
+  fi
 
   # összegzés
-  title "Összegzés" "Summary"
-  printf '   %-16s %s\n' "$(m 'Verzió' 'Version')" "$VERSION" \
-    "$(m 'Mappa' 'Folder')" "$DEST" \
-    "$(m 'Felhasználó' 'User')" "$NEW_USER" \
-    "Port" "$NEW_PORT" \
-    "$(m 'Cím' 'Address')" "$NEW_HOST" \
-    "$(m 'Nyelv' 'Language')" "$NEW_LANG" \
-    "$(m 'Jelszó' 'Password')" "$([ -n "$PW_LINES" ] && m 'van' 'yes' || m 'nincs' 'none')" \
-    "$(m 'Frissítésjelzés' 'Update notice')" "$([ "$NEW_UPD" = 1 ] && m 'be' 'on' || m 'ki' 'off')"
+  onoff() { if [ "$1" = 1 ]; then m 'be' 'on'; else m 'ki' 'off'; fi; }
+  echo
+  box "$C" "$(m 'Összegzés' 'Summary')" \
+    "$(row "$(m 'Verzió' 'Version')" "$VERSION")" \
+    "$(row "$(m 'Mappa' 'Folder')" "$DEST")" \
+    "$(row "$(m 'Felhasználó' 'User')" "$NEW_USER")" \
+    "$(row Port "$NEW_PORT")" \
+    "$(row "$(m 'Cím' 'Address')" "$NEW_HOST")" \
+    "$(row "$(m 'Nyelv' 'Language')" "$NEW_LANG")" \
+    "$(row "$(m 'Jelszó' 'Password')" "$([ -n "$PW_LINES" ] && m 'van' 'yes' || m "${Y}nincs${N}" "${Y}none${N}")")" \
+    "$(row "$(m 'Frissítésjelzés' 'Update notice')" "$(onoff "$NEW_UPD")")" \
+    "$(row "$(m 'Automatikus frissítés' 'Automatic update')" "$(onoff "$NEW_AUTO")")"
   echo
   yesno "Mehet a telepítés?" "Proceed with the installation?" y || die "Megszakítva." "Cancelled."
 else
@@ -533,9 +639,18 @@ L="$NEW_LANG"
 
 # ------------------------------------------------------------------ telepítés / install
 [ "$MODE" = apply ] || info "Szolgáltatás beállítása…" "Setting up the service…"
+if [ "$DEMO" = 1 ]; then
+  demo "A program a $DEST mappába kerülne (git-klón)." "The program would go to $DEST (a git clone)."
+  demo "Beállítások: $ENV_FILE" "Settings: $ENV_FILE"
+  demo "Szolgáltatás: $UNIT (felhasználó: $NEW_USER), kezelő parancs: $BIN" "Service: $UNIT (user: $NEW_USER), management command: $BIN"
+  [ "$NEW_UPD" = 1 ] && demo "Frissítés a felületről: $UPD_PATH" "Updating from the UI: $UPD_PATH"
+  [ "$NEW_AUTO" = 1 ] && demo "Automatikus frissítés: $AUTO_TIMER (éjjel 4–5)" "Automatic update: $AUTO_TIMER (4–5 am)"
+  demo "systemctl enable + restart $SERVICE" "systemctl enable + restart $SERVICE"
+else
 write_env
 write_service
 start_service
+fi
 
 if [ "$MODE" = apply ]; then
   ok "Gabo Commander v$VERSION fut (port $NEW_PORT)." "Gabo Commander v$VERSION is running (port $NEW_PORT)."
@@ -543,6 +658,7 @@ if [ "$MODE" = apply ]; then
 fi
 
 # ------------------------------------------------------------------ tűzfal / firewall
+fw_run() { if [ "$DEMO" = 1 ]; then demo "$*" "$*" >&2; else "$@"; fi; }   # demó: csak kiírja
 if [ "$NEW_HOST" != 127.0.0.1 ]; then
   if command -v ufw >/dev/null 2>&1 && ufw status 2>/dev/null | grep -q "Status: active"; then
     title "Tűzfal (ufw)" "Firewall (ufw)"
@@ -556,24 +672,29 @@ if [ "$NEW_HOST" != 127.0.0.1 ]; then
         "$(m 'Nem nyúlok a tűzfalhoz' "Don't touch the firewall")"
       case "$fw" in
         1) for net in 192.168.0.0/16 10.0.0.0/8 172.16.0.0/12; do
-             ufw allow from "$net" to any port "$NEW_PORT" proto tcp comment 'Gabo Commander' >/dev/null
+             fw_run ufw allow from "$net" to any port "$NEW_PORT" proto tcp comment 'Gabo Commander' >/dev/null
            done; ok "ufw: engedélyezve a belső hálózatról." "ufw: allowed from the local network." ;;
-        2) ufw allow "$NEW_PORT/tcp" comment 'Gabo Commander' >/dev/null; ok "ufw: engedélyezve." "ufw: allowed." ;;
+        2) fw_run ufw allow "$NEW_PORT/tcp" comment 'Gabo Commander' >/dev/null; ok "ufw: engedélyezve." "ufw: allowed." ;;
       esac
     fi
   elif command -v firewall-cmd >/dev/null 2>&1 && firewall-cmd --state >/dev/null 2>&1; then
     title "Tűzfal (firewalld)" "Firewall (firewalld)"
     if yesno "Megnyissam a(z) $NEW_PORT/tcp portot?" "Open port $NEW_PORT/tcp?" y; then
-      firewall-cmd --permanent --add-port="$NEW_PORT/tcp" >/dev/null && firewall-cmd --reload >/dev/null
+      fw_run firewall-cmd --permanent --add-port="$NEW_PORT/tcp" >/dev/null && fw_run firewall-cmd --reload >/dev/null
       ok "firewalld: port megnyitva." "firewalld: port opened."
     fi
   fi
 fi
 
 # ------------------------------------------------------------------ kész / done
-title "Kész! Gabo Commander v$VERSION fut." "Done! Gabo Commander v$VERSION is running."
-say "   Nyisd meg a böngészőben:" "   Open it in your browser:"
-show_urls
+done_lines=("$(m "Gabo Commander v$VERSION fut." "Gabo Commander v$VERSION is running.")" "" "$(m 'Nyisd meg a böngészőben:' 'Open it in your browser:')")
+while IFS= read -r u; do done_lines+=("  $B$u$N"); done < <(url_list)
+echo
+box "$G" "$(m 'Kész!' 'Done!')" "${done_lines[@]}"
+if [ "$NEW_HOST" = 127.0.0.1 ]; then
+  say "   Távolról SSH-alagúttal:  ssh -L $NEW_PORT:127.0.0.1:$NEW_PORT $(hostname)  → http://localhost:$NEW_PORT/" \
+      "   Remotely via SSH tunnel: ssh -L $NEW_PORT:127.0.0.1:$NEW_PORT $(hostname)  → http://localhost:$NEW_PORT/"
+fi
 echo
 say "   A szerver újraindítása után magától elindul. Hasznos parancsok:" \
     "   It starts automatically after a reboot. Useful commands:"
@@ -588,6 +709,11 @@ if [ -z "$PW_LINES" ] && [ "$NEW_HOST" != 127.0.0.1 ]; then
   echo
   warn "Nincs jelszó: csak megbízható belső hálózaton használd! Beállítás: sudo gabo-commander password" \
        "No password: use it only on a trusted local network! Set one: sudo gabo-commander password"
+fi
+if [ "$DEMO" = 1 ]; then
+  echo
+  demo "Vége a demónak – semmi nem változott. Valódi telepítés: sudo bash install.sh" \
+       "End of the demo – nothing was changed. Real install: sudo bash install.sh"
 fi
 }
 

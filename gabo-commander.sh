@@ -63,6 +63,10 @@ case "$CMD" in
         echo "   http://$h:$p/"
       fi
     fi
+    if systemctl is-enabled --quiet gabo-commander-autoupdate.timer 2>/dev/null; then
+      say "   Automatikus frissítés: be (éjjel 4–5, napló: sudo journalctl -u gabo-commander-autoupdate)" \
+          "   Automatic update: on (4–5 am, log: sudo journalctl -u gabo-commander-autoupdate)"
+    fi
     systemctl --no-pager --lines=0 status "$SERVICE" 2>/dev/null | sed -n '1,4p' || true
     ;;
 
@@ -136,8 +140,9 @@ case "$CMD" in
     printf '%s' "$(m 'Biztosan eltávolítod a Gabo Commandert? [i/N]: ' 'Really uninstall Gabo Commander? [y/N]: ')"
     IFS= read -r a </dev/tty || a=""
     case "$(printf '%s' "$a" | tr '[:upper:]' '[:lower:]')" in y|yes|i|igen) ;; *) die "Megszakítva." "Cancelled." ;; esac
-    systemctl disable --now "$SERVICE" gabo-commander-update.path >/dev/null 2>&1 || true
+    systemctl disable --now "$SERVICE" gabo-commander-update.path gabo-commander-autoupdate.timer >/dev/null 2>&1 || true
     rm -f "$UNIT" "$BIN" /etc/systemd/system/gabo-commander-update.service /etc/systemd/system/gabo-commander-update.path \
+          /etc/systemd/system/gabo-commander-autoupdate.service /etc/systemd/system/gabo-commander-autoupdate.timer \
           /var/log/gabo-commander-update.log
     systemctl daemon-reload
     ok "Szolgáltatás eltávolítva." "Service removed."

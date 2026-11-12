@@ -30,13 +30,18 @@ The **setup wizard** asks a few questions. Press Enter to accept the default for
 3. **Port**, default **28090**. The wizard checks that the port is free and suggests another one if it isn't.
 4. **Where it is reachable from**: the whole network, or only localhost (behind a reverse proxy or SSH tunnel)
 5. **Password**, stored as a PBKDF2 hash, never in plain text
-6. **Updates**: whether the UI should tell you when a new version is out, and allow updating from there
+6. **Updates**: whether the UI should tell you when a new version is out, and allow updating from there.
+   Optionally **automatic updates**: new versions are installed by themselves every night between 4 and 5 am
+   (log: `sudo journalctl -u gabo-commander-autoupdate`). Turn it on or off later with `sudo gabo-commander config`.
 
 The wizard also installs missing packages (`python3`, `git`), opens the port in `ufw`/`firewalld` if you ask it to,
 and sets the program up as a **systemd service**. The service starts on every boot and is restarted
 if it ever stops.
 
 Then open `http://SERVER_IP:28090/` in the browser.
+
+To just **look at the wizard** without installing anything, run `bash install.sh --demo`. It asks every question,
+then only lists what it would do. It needs no root or systemd, so it also runs in Git Bash on Windows.
 
 ## Update
 
@@ -136,7 +141,7 @@ If you want to reach it from the internet, **do not open the port directly**. Tw
    ```
    It updates `VERSION` and `CHANGELOG.md`, commits, creates the `vX.Y.Z` tag and pushes everything.
    GitHub Actions then creates the release page under *Releases*.
-3. Servers show the update badge within a few hours. On the server, `sudo gabo-commander update` installs it.
+3. Servers show the update badge within a day (*Help → Check for updates…* shows it right away). On the server, `sudo gabo-commander update` installs it.
 
 ## Files
 

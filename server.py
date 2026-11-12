@@ -2293,6 +2293,7 @@ def check_password(pw):
 # ------------------------------------------------------------------ frissítés-ellenőrzés / update check
 
 UPDATE = {'at': 0.0, 'latest': None}
+UPDATE_EVERY = 24 * 3600          # ennyi időnként kérdezi a GitHubot (a menüből kért ellenőrzés mindig friss)
 UPDATE_LOCK = threading.Lock()
 
 
@@ -2331,12 +2332,12 @@ def _fetch_latest():
 
 
 def check_update(force=False):
-    """Óránként néz rá a GitHubra (hiba esetén 15 percenként); force: a menüből kért ellenőrzés, mindig friss."""
+    """Naponta egyszer néz rá a GitHubra (hiba esetén 15 percenként); force: a menüből kért ellenőrzés, mindig friss."""
     if not CONFIG['update_check'] or not CONFIG['repo']:
         return {'enabled': False, 'current': VERSION}
     with UPDATE_LOCK:
         age = time.time() - UPDATE['at']
-        if force and age > 5 or age > (3600 if UPDATE['latest'] else 900):
+        if force and age > 5 or age > (UPDATE_EVERY if UPDATE['latest'] else 900):
             latest = _fetch_latest()
             if latest:
                 UPDATE['latest'] = latest

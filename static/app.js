@@ -2378,8 +2378,7 @@ async function init() {
   pollJobs();
   setInterval(() => { if (!document.hidden) loadDrives(); }, 30000);
   document.addEventListener('visibilitychange', () => { if (!document.hidden) pollSoon(); });
-  checkUpdate(false);
-  setInterval(() => checkUpdate(false), 3600 * 1000);
+  checkUpdate(false);   // csak megnyitáskor / belépéskor; a GitHubot a szerver naponta kérdezi, a menüből azonnal
 }
 
 run(init);

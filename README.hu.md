@@ -30,13 +30,18 @@ A **telepítő varázsló** néhány kérdést tesz fel, mindegyiknél Enterrel 
 3. **Port**, alapból **28090**. A varázsló megnézi, hogy szabad-e, és ha nem, másikat javasol.
 4. **Honnan érhető el**: az egész hálózatról, vagy csak a gépről (fordított proxy vagy SSH-alagút mögött)
 5. **Jelszó**: PBKDF2-hashként tárolja, sosem nyílt szövegként
-6. **Frissítések**: szóljon-e a felület, ha új verzió jelent meg, és lehessen-e onnan frissíteni
+6. **Frissítések**: szóljon-e a felület, ha új verzió jelent meg, és lehessen-e onnan frissíteni.
+   Kérésre **automatikus frissítés** is: éjszakánként 4 és 5 óra között magától felteszi az új verziót
+   (napló: `sudo journalctl -u gabo-commander-autoupdate`). Később a `sudo gabo-commander config` paranccsal kapcsolható.
 
 A varázsló a hiányzó csomagokat (`python3`, `git`) is felteszi, kérésre megnyitja a portot az `ufw`/`firewalld`
 tűzfalon, és **systemd szolgáltatásként** állítja be a programot. Így **a szerver minden újraindítása után
 magától elindul**, és ha valamiért leállna, újraindul.
 
 Ezután a böngészőben a `http://SZERVER_IP:28090/` címen éred el.
+
+Ha csak **meg akarod nézni a varázslót**, telepítés nélkül: `bash install.sh --demo`. Minden kérdést feltesz,
+utána csak kiírja, mit csinálna. Nem kell hozzá root és systemd, így Windowson Git Bashből is fut.
 
 ## Frissítés
 
@@ -137,7 +142,7 @@ Ha internetről is el akarod érni, **ne nyisd ki közvetlenül a portot**. Két
    ```
    Átírja a `VERSION`-t és a `CHANGELOG.md`-t, commitol, létrehozza a `vX.Y.Z` taget, és mindent feltölt.
    Utána a GitHub Actions elkészíti a kiadás oldalát a *Releases* alatt.
-3. A szervereken néhány órán belül megjelenik a frissítésjelzés. A szerveren a `sudo gabo-commander update` telepíti.
+3. A szervereken egy napon belül megjelenik a frissítésjelzés (a *Súgó → Frissítés keresése…* azonnal megmutatja). A szerveren a `sudo gabo-commander update` telepíti.
 
 ## Fájlok
 

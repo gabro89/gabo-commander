@@ -5,6 +5,19 @@
 
 ## Unreleased
 
+- Installer demo: `bash install.sh --demo` walks through the wizard without changing anything (also in Git Bash on Windows).
+  The summary table no longer shifts at accented words.
+  · Telepítő demó: a `bash install.sh --demo` végigmegy a varázslón, de semmit nem módosít (Windowson Git Bashből is).
+  Az összegző táblázat nem csúszik el az ékezetes szavaknál.
+- The server checks GitHub for a new version once a day instead of every hour (*Help → Check for updates…* still checks right away).
+  · A szerver óránként helyett naponta egyszer nézi meg a GitHubon, van-e új verzió (a *Súgó → Frissítés keresése…* továbbra is azonnal ellenőriz).
+- The browser asks about updates only when you open the page or log in, not every hour.
+  · A böngésző csak megnyitáskor / belépéskor kérdez rá a frissítésre, óránként nem.
+- Installer: new look (header, step indicator, framed summary and address) and an optional **automatic update**
+  every night between 4 and 5 am (`sudo gabo-commander config` to turn it on).
+  · Telepítő: új külső (fejléc, lépésjelző, keretes összegzés és cím), és kérésre **automatikus frissítés**
+  éjszakánként 4 és 5 óra között (bekapcsolás: `sudo gabo-commander config`).
+
 ## 1.5.5 – 2026-11-12
 
 - New: the Modified, Created, Perms and Owner columns can be shown or hidden in the *View* menu.
