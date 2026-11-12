@@ -5,6 +5,8 @@
 
 ## Unreleased
 
+## 1.5.5 – 2026-11-12
+
 - New: the Modified, Created, Perms and Owner columns can be shown or hidden in the *View* menu.
   · Új: a Módosítva, Létrehozva, Jogok és Tulajdonos oszlop a *Nézet* menüben ki- és bekapcsolható.
 
