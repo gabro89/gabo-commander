@@ -5,6 +5,8 @@
 
 ## Unreleased
 
+## 1.5.6 – 2026-11-12
+
 - Installer demo: `bash install.sh --demo` walks through the wizard without changing anything (also in Git Bash on Windows).
   The summary table no longer shifts at accented words.
   · Telepítő demó: a `bash install.sh --demo` végigmegy a varázslón, de semmit nem módosít (Windowson Git Bashből is).
