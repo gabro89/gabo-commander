@@ -5,6 +5,11 @@
 
 ## Unreleased
 
+- Left click only moves the cursor and keeps the selection, like in Total Commander (select with the right button, Ctrl+click,
+  Shift+click). The old behavior: *View → Left click selects (Windows style)*.
+  · A bal klikk csak a kurzort viszi, a kijelölés megmarad, mint a Total Commanderben (jelölés: jobb gomb, Ctrl+klikk,
+  Shift+klikk). A régi viselkedés: *Nézet → Bal klikk kijelöl (Windows-stílus)*.
+
 ## 1.5.3 – 2026-11-11
 
 - An unreachable network drive (NFS, SMB) no longer blocks the drive bar or ties up the server: it waits at most 1.5 s and shows the last known size.

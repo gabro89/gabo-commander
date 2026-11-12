@@ -82,7 +82,8 @@ Kérdések nélküli telepítés: `sudo bash install.sh --yes --lang hu --user g
   mellettük a **szabad hely** csíkkal és százalékkal.
 - Oszlopok: név, kiterjesztés, **méret**, **módosítás**, **létrehozás dátuma**, **jogok** (`rwxr-xr-x`) és tulajdonos.
   Az oszlopfejlécre kattintva rendez.
-- **Kijelölés**: Space, Insert, egér (klikk, Ctrl+klikk, Shift+klikk, jobb gomb húzva), Num+ / Num− minta szerint.
+- **Kijelölés**: Space, Insert, egér (Ctrl+klikk, Shift+klikk, jobb gomb, húzva is), Num+ / Num− minta szerint.
+  A sima bal klikk csak a kurzort viszi, a kijelölés marad, mint a TC-ben (*Nézet → Bal klikk kijelöl*: Windows-stílus).
   A kijelölt elemek pirosak. Mappán Space-t nyomva kiszámolja a mappa méretét.
 - **Másolás és áthelyezés** (F5/F6) háttérben fut, közben látszik a **sebesség**, a **hátralévő idő**
   és a **várható befejezés időpontja**. Ha a célban már van ilyen fájl, rákérdez.

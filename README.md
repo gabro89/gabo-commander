@@ -81,7 +81,8 @@ For an unattended install: `sudo bash install.sh --yes --lang en --user gabor --
   with **free space** as a bar and percentage.
 - Columns: name, extension, **size**, **modified**, **created** date, **permissions** (`rwxr-xr-x`) and owner.
   Click a column header to sort.
-- **Selection**: Space, Insert, mouse (click, Ctrl+click, Shift+click, right-button drag), Num+ / Num− by pattern.
+- **Selection**: Space, Insert, mouse (Ctrl+click, Shift+click, right button, also dragging), Num+ / Num− by pattern.
+  A plain left click only moves the cursor and keeps the selection, like in TC (*View → Left click selects* switches to Windows style).
   Selected items are red. Pressing Space on a folder calculates its size.
 - **Copy and move** (F5/F6) run in the background and show **speed**, **time left**
   and **estimated finish time**. If a file already exists at the target, it asks what to do.

@@ -28,7 +28,8 @@ let DRIVES = [];
 const panels = {};
 let active = null;
 let showHidden = false;
-let lynx = false;                   /* Lynx-navigáció: → belép a mappába, ← a szülőbe (Nézet menü) */
+let lynx = false;
+let leftSel = false;                /* bal klikk kijelöl (Windows-stílus); alapból TC-stílus: csak a kurzor mozog */                   /* Lynx-navigáció: → belép a mappába, ← a szülőbe (Nézet menü) */
 let clip = null;
 let dragData = null;
 const modalStack = [];
@@ -327,10 +328,12 @@ class Panel {
         this.anchor = i;
       } else if (e.shiftKey) {
         this.selectRange(this.anchor, i);
-      } else {
+      } else if (leftSel) {                        // Windows-stílus: a bal klikk kijelöl
         if (!this.sel.has(ent.n)) { this.sel.clear(); if (!ent.up) this.sel.add(ent.n); }
         else this.pendingSingle = i;               // kijelöltre kattintás: húzás jöhet
         this.anchor = i;
+      } else {
+        this.anchor = i;                           // TC-stílus: a bal klikk csak a kurzort viszi, a kijelölés marad
       }
       this.cursor = i;
       this.render(); this.updateStatus();
@@ -373,8 +376,10 @@ class Panel {
       const ent = row && this.view[+row.dataset.i];
       if (!ent || ent.up) { e.preventDefault(); return; }
       this.pendingSingle = null;
-      if (!this.sel.has(ent.n)) { this.sel.clear(); this.sel.add(ent.n); this.render(); this.updateStatus(); }
-      const items = this.targets();
+      let items;
+      if (this.sel.has(ent.n)) items = this.targets();           // kijelöltről indul: az egész kijelölés megy
+      else if (leftSel) { this.sel.clear(); this.sel.add(ent.n); this.render(); this.updateStatus(); items = [ent]; }
+      else items = [ent];                                       // TC-stílus: csak ez az elem, a kijelölés marad
       dragData = { panel: this, items };
       e.dataTransfer.effectAllowed = 'copyMove';
       e.dataTransfer.setData('text/plain', items.map(x => pjoin(this.path, x.n)).join('\n'));
@@ -1623,6 +1628,12 @@ function lynxEnter(p) {
   if (e && (e.d || e.up || (!p.arc && ARCH_RE.test(e.n)))) return p.openCur();
 }
 
+function toggleLeftSel() {
+  leftSel = !leftSel;
+  store.set('leftsel', leftSel);
+  toast(t(leftSel ? 'leftsel_on' : 'leftsel_off'));
+}
+
 function toggleHidden() {
   showHidden = !showHidden;
   store.set('hidden', showHidden);
@@ -1725,7 +1736,7 @@ function cmdUpload() {
 const CMD = {
   view: cmdView, edit: () => cmdEdit(), newfile: cmdNewFile, copy: () => copyDialog(false), move: () => copyDialog(true),
   mkdir: cmdMkdir, del: cmdDelete, chmod: cmdChmod, rename: cmdRename, multirename: cmdMultiRename,
-  refresh: () => { loadDrives(); return refreshAll(); }, hidden: toggleHidden, lynx: toggleLynx, swap: swapPanels,
+  refresh: () => { loadDrives(); return refreshAll(); }, hidden: toggleHidden, lynx: toggleLynx, leftsel: toggleLeftSel, swap: swapPanels,
   same: () => active.other.load(active.path), upload: cmdUpload, download: cmdDownload,
   sizes: () => active.calcAll(), help: cmdHelp, selpat: () => selectPattern(true), unselpat: () => selectPattern(false),
   invert: () => active.invert(), selall: () => active.selectAll(), selnone: () => active.selectNone(),
@@ -1865,7 +1876,8 @@ const MENUS = [
   ['m_view', [
     ['mi_hidden', 'hidden', 'Ctrl+H', () => showHidden],
     ['mi_filter', 'filter', 'Ctrl+F'], ['mi_qview', 'qview', 'Ctrl+Q', () => qv.on],
-    ['mi_lynx', 'lynx', '← →', () => lynx], '-',
+    ['mi_lynx', 'lynx', '← →', () => lynx],
+    ['mi_leftsel', 'leftsel', '', () => leftSel], '-',
     ['mi_sort_n', 'sort_n', '', () => active && active.sort.key === 'n'],
     ['mi_sort_e', 'sort_e', '', () => active && active.sort.key === 'e'],
     ['mi_sort_s', 'sort_s', '', () => active && active.sort.key === 's'],
@@ -2336,6 +2348,7 @@ async function init() {
   buildMenubar();
   showHidden = store.get('hidden', false);
   lynx = store.get('lynx', false);
+  leftSel = store.get('leftsel', false);
   $('[data-cmd=hidden]').classList.toggle('on', showHidden);
   panels.L = new Panel('L', $('#left'));
   panels.R = new Panel('R', $('#right'));
